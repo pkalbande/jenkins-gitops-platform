@@ -11,45 +11,8 @@ jenkins:
   
   javaOpts: "-Xmx1024m -Xms512m -Djenkins.install.runSetupWizard=false"
   
-  # Jenkins plugins to install (using 'latest' for compatibility)
-  plugins:
-    # Core plugins
-    - kubernetes:latest
-    - workflow-aggregator:latest
-    - git:latest
-    - configuration-as-code:latest
-    - job-dsl:latest
-    
-    # Build and Release plugins
-    - pipeline-stage-view:latest
-    - pipeline-graph-view:latest
-    - build-pipeline-plugin:latest
-    - delivery-pipeline-plugin:latest
-    
-    # Promotion plugin
-    - promoted-builds:latest
-    
-    # SCM plugins
-    - github:latest
-    - github-branch-source:latest
-    
-    # Docker plugins
-    - docker-workflow:latest
-    - docker-plugin:latest
-    
-    # Kubernetes plugins
-    - kubernetes-credentials-provider:latest
-    
-    # Utility plugins
-    - credentials:latest
-    - credentials-binding:latest
-    - plain-credentials:latest
-    - ssh-credentials:latest
-    - timestamper:latest
-    - ws-cleanup:latest
-    - ansicolor:latest
-    - build-timeout:latest
-    - email-ext:latest
+  # Jenkins plugins - will be installed on first boot via install-plugins.txt
+  installPlugins: true
   
   resources:
     requests:
@@ -125,13 +88,6 @@ jenkins:
                     }
                   }
                   scriptPath('jenkins/pipelines/release-build/Jenkinsfile')
-                }
-              }
-              properties {
-                pipelineTriggers {
-                  triggers {
-                    githubPush()
-                  }
                 }
               }
             }

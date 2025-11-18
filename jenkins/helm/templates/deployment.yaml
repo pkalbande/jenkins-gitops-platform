@@ -18,25 +18,6 @@ spec:
       serviceAccountName: {{ .Values.jenkins.serviceAccount }}
       securityContext:
         fsGroup: 1000
-      initContainers:
-        - name: install-plugins
-          image: "{{ .Values.jenkins.image }}:{{ .Values.jenkins.tag }}"
-          imagePullPolicy: {{ .Values.jenkins.imagePullPolicy }}
-          command:
-            - sh
-            - -c
-            - |
-              echo "Installing Jenkins plugins..."
-              {{- if .Values.jenkins.plugins }}
-              jenkins-plugin-cli --plugins \
-              {{- range .Values.jenkins.plugins }}
-                {{ . }} \
-              {{- end }}
-              {{- end }}
-              echo "Plugins installation complete"
-          volumeMounts:
-            - name: jenkins-home
-              mountPath: /var/jenkins_home
       containers:
         - name: jenkins
           image: "{{ .Values.jenkins.image }}:{{ .Values.jenkins.tag }}"
