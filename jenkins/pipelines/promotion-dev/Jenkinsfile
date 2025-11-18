@@ -14,7 +14,7 @@ pipeline {
     environment {
         DOCKER_REGISTRY = 'your-registry.azurecr.io'
         ENVIRONMENT = 'dev'
-        GIT_REPO = 'https://github.com/your-org/jenkins-gitops-platform.git'
+        GIT_REPO = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
     }
     
     stages {

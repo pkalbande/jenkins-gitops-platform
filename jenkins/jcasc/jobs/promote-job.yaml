@@ -32,7 +32,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  url('https://github.com/pkalbande/jenkins-gitops-platform.git')
                   credentials('github-token')
                 }
                 branch('*/main')
@@ -54,7 +54,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  url('https://github.com/pkalbande/jenkins-gitops-platform.git')
                   credentials('github-token')
                 }
                 branch('*/main')
@@ -76,7 +76,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  url('https://github.com/pkalbande/jenkins-gitops-platform.git')
                   credentials('github-token')
                 }
                 branch('*/main')
@@ -98,7 +98,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  url('https://github.com/pkalbande/jenkins-gitops-platform.git')
                   credentials('github-token')
                 }
                 branch('*/main')
