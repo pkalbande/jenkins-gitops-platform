@@ -13,7 +13,7 @@ spec:
     path: jenkins/helm
     helm:
       valueFiles:
-        - ../../argocd/values/jenkins-values.yaml
+        - values-local.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: jenkins

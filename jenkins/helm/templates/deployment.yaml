@@ -18,6 +18,25 @@ spec:
       serviceAccountName: {{ .Values.jenkins.serviceAccount }}
       securityContext:
         fsGroup: 1000
+      initContainers:
+        - name: install-plugins
+          image: "{{ .Values.jenkins.image }}:{{ .Values.jenkins.tag }}"
+          imagePullPolicy: {{ .Values.jenkins.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Installing Jenkins plugins..."
+              {{- if .Values.jenkins.plugins }}
+              jenkins-plugin-cli --plugins \
+              {{- range .Values.jenkins.plugins }}
+                {{ . }} \
+              {{- end }}
+              {{- end }}
+              echo "Plugins installation complete"
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
       containers:
         - name: jenkins
           image: "{{ .Values.jenkins.image }}:{{ .Values.jenkins.tag }}"
@@ -34,6 +53,9 @@ spec:
               value: "{{ .Values.jenkins.javaOpts }}"
             - name: CASC_JENKINS_CONFIG
               value: /var/jenkins_home/casc_configs
+          envFrom:
+            - secretRef:
+                name: jenkins-secrets
           volumeMounts:
             - name: jenkins-home
               mountPath: /var/jenkins_home
@@ -45,7 +67,7 @@ spec:
             httpGet:
               path: /login
               port: 8080
-            initialDelaySeconds: 90
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
@@ -53,7 +75,7 @@ spec:
             httpGet:
               path: /login
               port: 8080
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3

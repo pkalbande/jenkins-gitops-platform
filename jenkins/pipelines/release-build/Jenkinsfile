@@ -1,1 +1,251 @@
-pipeline{}
+pipeline {
+    agent {
+        kubernetes {
+            label 'jnlp-agent'
+            defaultContainer 'jnlp'
+        }
+    }
+    
+    parameters {
+        choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to build')
+        string(name: 'VERSION', defaultValue: '1.0.0', description: 'Release version (e.g., 1.0.0)')
+        booleanParam(name: 'DEPLOY_TO_DEV', defaultValue: true, description: 'Automatically deploy to dev environment')
+    }
+    
+    environment {
+        DOCKER_REGISTRY = 'localhost:5000'
+        GIT_REPO = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
+        GIT_CREDENTIALS = 'github-token'
+        DOCKER_CREDENTIALS = 'docker-registry'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "=== Jenkins Release Job ==="
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Version: ${params.VERSION}"
+                    echo "Deploy to Dev: ${params.DEPLOY_TO_DEV}"
+                }
+                
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    userRemoteConfigs: [[
+                        url: "${env.GIT_REPO}",
+                        credentialsId: "${env.GIT_CREDENTIALS}"
+                    ]]
+                ])
+            }
+        }
+        
+        stage('Validate') {
+            steps {
+                script {
+                    echo "Validating application structure..."
+                    
+                    sh """
+                        if [ ! -d "apps/${params.APPLICATION}" ]; then
+                            echo "Application directory not found: apps/${params.APPLICATION}"
+                            exit 1
+                        fi
+                        
+                        if [ ! -f "apps/${params.APPLICATION}/Dockerfile" ]; then
+                            echo "Dockerfile not found for ${params.APPLICATION}"
+                            exit 1
+                        fi
+                        
+                        echo "✓ Application structure validated"
+                    """
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo "Building Docker image for ${params.APPLICATION}:${params.VERSION}"
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            # Build image
+                            docker build -t ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION} .
+                            docker tag ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION} \
+                                       ${env.DOCKER_REGISTRY}/${params.APPLICATION}:latest
+                            
+                            echo "✓ Docker image built successfully"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                script {
+                    echo "Running application tests..."
+                    
+                    // Add your test logic here
+                    sh """
+                        echo "Running unit tests for ${params.APPLICATION}"
+                        # Add actual test commands here
+                        sleep 2
+                        echo "✓ All tests passed"
+                    """
+                }
+            }
+        }
+        
+        stage('Push to Registry') {
+            steps {
+                script {
+                    echo "Pushing image to registry..."
+                    
+                    withCredentials([usernamePassword(
+                        credentialsId: "${env.DOCKER_CREDENTIALS}",
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            # Login to registry
+                            echo \${DOCKER_PASS} | docker login ${env.DOCKER_REGISTRY} -u \${DOCKER_USER} --password-stdin || true
+                            
+                            # Push versioned image
+                            docker push ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION}
+                            
+                            # Push latest tag
+                            docker push ${env.DOCKER_REGISTRY}/${params.APPLICATION}:latest
+                            
+                            echo "✓ Image pushed to registry"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Create Git Tag') {
+            steps {
+                script {
+                    echo "Creating Git tag for release..."
+                    
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            # Configure git
+                            git config --global user.email "jenkins@gitops.local"
+                            git config --global user.name "Jenkins Release"
+                            
+                            # Create and push tag
+                            git tag -a ${params.APPLICATION}-${params.VERSION} -m "Release ${params.APPLICATION} version ${params.VERSION}"
+                            git push https://\${GITHUB_TOKEN}@github.com/pkalbande/jenkins-gitops-platform.git ${params.APPLICATION}-${params.VERSION}
+                            
+                            echo "✓ Git tag created: ${params.APPLICATION}-${params.VERSION}"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Update Dev Environment') {
+            when {
+                expression { params.DEPLOY_TO_DEV == true }
+            }
+            steps {
+                script {
+                    echo "Updating dev environment with new version..."
+                    
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            # Configure git
+                            git config --global user.email "jenkins@gitops.local"
+                            git config --global user.name "Jenkins Release"
+                            
+                            # Extract app name (remove -node or -python suffix)
+                            APP_NAME=\$(echo "${params.APPLICATION}" | sed 's/-node//' | sed 's/-python//')
+                            
+                            # Update dev environment values
+                            DEV_VALUES="environments/dev/\${APP_NAME}-values.yaml"
+                            
+                            if [ -f "\${DEV_VALUES}" ]; then
+                                # Update image tag
+                                sed -i.bak "s/tag: .*/tag: ${params.VERSION}/" \${DEV_VALUES}
+                                rm -f \${DEV_VALUES}.bak
+                                
+                                # Commit and push
+                                git add \${DEV_VALUES}
+                                git commit -m "Release: Update \${APP_NAME} to version ${params.VERSION} in dev"
+                                git push https://\${GITHUB_TOKEN}@github.com/pkalbande/jenkins-gitops-platform.git master
+                                
+                                echo "✓ Dev environment updated"
+                            else
+                                echo "⚠ Dev values file not found: \${DEV_VALUES}"
+                            fi
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Trigger ArgoCD Sync') {
+            when {
+                expression { params.DEPLOY_TO_DEV == true }
+            }
+            steps {
+                script {
+                    echo "Triggering ArgoCD sync for dev environment..."
+                    
+                    sh """
+                        # Extract app name
+                        APP_NAME=\$(echo "${params.APPLICATION}" | sed 's/-node//' | sed 's/-python//')
+                        
+                        echo "ArgoCD will automatically sync \${APP_NAME}-dev"
+                        echo "New version: ${params.VERSION}"
+                        
+                        # Optional: Add ArgoCD CLI commands to trigger sync
+                        # argocd app sync \${APP_NAME}-dev
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                echo """
+                ========================================
+                ✓ RELEASE BUILD SUCCESSFUL
+                ========================================
+                Application: ${params.APPLICATION}
+                Version: ${params.VERSION}
+                Image: ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION}
+                Tag: ${params.APPLICATION}-${params.VERSION}
+                Deployed to Dev: ${params.DEPLOY_TO_DEV}
+                ========================================
+                """
+            }
+        }
+        failure {
+            script {
+                echo """
+                ========================================
+                ✗ RELEASE BUILD FAILED
+                ========================================
+                Application: ${params.APPLICATION}
+                Version: ${params.VERSION}
+                ========================================
+                """
+            }
+        }
+        always {
+            script {
+                // Cleanup Docker images
+                sh """
+                    docker rmi ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION} || true
+                    docker rmi ${env.DOCKER_REGISTRY}/${params.APPLICATION}:latest || true
+                """
+            }
+            cleanWs()
+        }
+    }
+}

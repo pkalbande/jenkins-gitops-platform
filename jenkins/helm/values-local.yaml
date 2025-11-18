@@ -11,6 +11,46 @@ jenkins:
   
   javaOpts: "-Xmx1024m -Xms512m -Djenkins.install.runSetupWizard=false"
   
+  # Jenkins plugins to install
+  plugins:
+    # Core plugins
+    - kubernetes:4252.v6f5a_b_fc1b_b_97
+    - workflow-aggregator:600.vb_57cdd26fdd7
+    - git:5.6.0
+    - configuration-as-code:1850.va_a_8c31d3158b_
+    - job-dsl:1.89
+    
+    # Build and Release plugins
+    - pipeline-stage-view:2.34
+    - pipeline-graph-view:406.vd1b_396fe74e4
+    - build-pipeline-plugin:1.5.8
+    - delivery-pipeline-plugin:1.7.0
+    
+    # Promotion plugin
+    - promoted-builds:999.vcf8f4b_37de1f
+    
+    # SCM plugins
+    - github:1.40.0
+    - github-branch-source:1797.v86fdb_4d57d43
+    
+    # Docker plugins
+    - docker-workflow:580.vc0c340686b_54
+    - docker-plugin:1.7.0
+    
+    # Kubernetes plugins
+    - kubernetes-credentials-provider:1.262.v2670ef7ea_0c5
+    
+    # Utility plugins
+    - credentials:1400.v7fd8f6b_ec501
+    - credentials-binding:696.v778d637b_a_762
+    - plain-credentials:183.va_de8f1dd5a_2b_
+    - ssh-credentials:351.v8b_8e8b_5b_9a_46
+    - timestamper:1.27
+    - ws-cleanup:0.47
+    - ansicolor:1.0.4
+    - build-timeout:1.33
+    - email-ext:1879.vf07de2f63df3
+  
   resources:
     requests:
       cpu: 500m
@@ -35,12 +75,15 @@ jenkins:
   casc:
     config: |
       jenkins:
-        systemMessage: "Jenkins GitOps Platform - Local Development"
+        systemMessage: "Jenkins GitOps Platform - Managed by ArgoCD"
         numExecutors: 2
         mode: NORMAL
         securityRealm:
           local:
             allowsSignup: false
+            users:
+              - id: admin
+                password: ${JENKINS_ADMIN_PASSWORD:-admin123}
         authorizationStrategy:
           loggedInUsersCanDoAnything:
             allowAnonymousRead: false
@@ -62,9 +105,83 @@ jenkins:
                       workingDir: /home/jenkins/agent
                       ttyEnabled: true
                       resourceRequestCpu: 100m
-                      resourceRequestMemory: 128Mi
+                      resourceRequestMemory: 256Mi
                       resourceLimitCpu: 500m
                       resourceLimitMemory: 512Mi
+      
+      jobs:
+        - script: >
+            pipelineJob('release-job') {
+              description('Jenkins Release Job - Build and publish artifacts')
+              definition {
+                cpsScm {
+                  scm {
+                    git {
+                      remote {
+                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                        credentials('github-token')
+                      }
+                      branch('*/master')
+                    }
+                  }
+                  scriptPath('jenkins/pipelines/release-build/Jenkinsfile')
+                }
+              }
+              properties {
+                pipelineTriggers {
+                  triggers {
+                    githubPush()
+                  }
+                }
+              }
+            }
+        
+        - script: >
+            pipelineJob('promotion-orchestrator-job') {
+              description('Promotion Orchestrator Job - Manage environment promotions')
+              definition {
+                cpsScm {
+                  scm {
+                    git {
+                      remote {
+                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                        credentials('github-token')
+                      }
+                      branch('*/master')
+                    }
+                  }
+                  scriptPath('jenkins/pipelines/promotion-orchestrator/Jenkinsfile')
+                }
+              }
+              parameters {
+                stringParam('SOURCE_ENV', 'dev', 'Source environment (dev, test, stage)')
+                stringParam('TARGET_ENV', 'test', 'Target environment (test, stage, prod)')
+                stringParam('APPLICATION', 'app1', 'Application name (app1, app2)')
+                stringParam('VERSION', '', 'Version/tag to promote')
+              }
+            }
+      
       unclassified:
         location:
           url: http://localhost:30000
+      
+      credentials:
+        system:
+          domainCredentials:
+            - credentials:
+                - string:
+                    scope: GLOBAL
+                    id: github-token
+                    secret: ${GITHUB_TOKEN}
+                    description: GitHub Personal Access Token
+                - usernamePassword:
+                    scope: GLOBAL
+                    id: docker-registry
+                    username: ${DOCKER_USERNAME:-admin}
+                    password: ${DOCKER_PASSWORD:-admin}
+                    description: Docker Registry Credentials
+                - string:
+                    scope: GLOBAL
+                    id: argocd-token
+                    secret: ${ARGOCD_TOKEN}
+                    description: ArgoCD API Token

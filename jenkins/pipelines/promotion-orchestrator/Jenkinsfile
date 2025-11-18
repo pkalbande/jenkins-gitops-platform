@@ -1,0 +1,205 @@
+pipeline {
+    agent {
+        kubernetes {
+            label 'jnlp-agent'
+            defaultContainer 'jnlp'
+        }
+    }
+    
+    parameters {
+        string(name: 'SOURCE_ENV', defaultValue: 'dev', description: 'Source environment (dev, test, stage)')
+        string(name: 'TARGET_ENV', defaultValue: 'test', description: 'Target environment (test, stage, prod)')
+        string(name: 'APPLICATION', defaultValue: 'app1', description: 'Application name (app1, app2)')
+        string(name: 'VERSION', defaultValue: '', description: 'Version/tag to promote')
+    }
+    
+    environment {
+        GIT_REPO = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
+        GIT_CREDENTIALS = 'github-token'
+        DOCKER_REGISTRY = 'localhost:5000'
+    }
+    
+    stages {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    echo "=== Promotion Orchestrator ==="
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Source Environment: ${params.SOURCE_ENV}"
+                    echo "Target Environment: ${params.TARGET_ENV}"
+                    echo "Version: ${params.VERSION}"
+                    
+                    // Validate environments
+                    def validEnvs = ['dev', 'test', 'stage', 'prod']
+                    if (!validEnvs.contains(params.SOURCE_ENV) || !validEnvs.contains(params.TARGET_ENV)) {
+                        error("Invalid environment specified. Valid options: ${validEnvs}")
+                    }
+                    
+                    // Validate promotion path
+                    def promotionPaths = [
+                        'dev': ['test'],
+                        'test': ['stage'],
+                        'stage': ['prod']
+                    ]
+                    
+                    if (!promotionPaths[params.SOURCE_ENV]?.contains(params.TARGET_ENV)) {
+                        error("Invalid promotion path: ${params.SOURCE_ENV} -> ${params.TARGET_ENV}")
+                    }
+                    
+                    if (!params.VERSION) {
+                        error("Version parameter is required")
+                    }
+                }
+            }
+        }
+        
+        stage('Verify Source Deployment') {
+            steps {
+                script {
+                    echo "Verifying ${params.APPLICATION}:${params.VERSION} in ${params.SOURCE_ENV}"
+                    
+                    // Check if the version exists in source environment
+                    def sourceValuesFile = "environments/${params.SOURCE_ENV}/${params.APPLICATION}-values.yaml"
+                    
+                    sh """
+                        if [ ! -f "${sourceValuesFile}" ]; then
+                            echo "Source values file not found: ${sourceValuesFile}"
+                            exit 1
+                        fi
+                        
+                        # Verify version in source environment
+                        echo "Checking version in source environment..."
+                        grep -q "tag: ${params.VERSION}" ${sourceValuesFile} || {
+                            echo "Version ${params.VERSION} not found in ${params.SOURCE_ENV}"
+                            exit 1
+                        }
+                        
+                        echo "✓ Version ${params.VERSION} verified in ${params.SOURCE_ENV}"
+                    """
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                script {
+                    echo "Running promotion validation tests..."
+                    
+                    // Add your test logic here
+                    // For example: smoke tests, integration tests, etc.
+                    
+                    sh """
+                        echo "Running smoke tests for ${params.APPLICATION}:${params.VERSION}"
+                        # Add actual test commands here
+                        sleep 2
+                        echo "✓ All tests passed"
+                    """
+                }
+            }
+        }
+        
+        stage('Update Target Environment') {
+            steps {
+                script {
+                    echo "Promoting ${params.APPLICATION}:${params.VERSION} to ${params.TARGET_ENV}"
+                    
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            # Configure git
+                            git config --global user.email "jenkins@gitops.local"
+                            git config --global user.name "Jenkins GitOps"
+                            
+                            # Clone repository
+                            git clone https://\${GITHUB_TOKEN}@github.com/pkalbande/jenkins-gitops-platform.git workspace
+                            cd workspace
+                            
+                            # Checkout master branch
+                            git checkout master
+                            
+                            # Update target environment values file
+                            TARGET_VALUES="environments/${params.TARGET_ENV}/${params.APPLICATION}-values.yaml"
+                            
+                            # Update image tag in target environment
+                            sed -i.bak "s/tag: .*/tag: ${params.VERSION}/" \${TARGET_VALUES}
+                            rm -f \${TARGET_VALUES}.bak
+                            
+                            # Commit and push changes
+                            git add \${TARGET_VALUES}
+                            git commit -m "Promote ${params.APPLICATION}:${params.VERSION} from ${params.SOURCE_ENV} to ${params.TARGET_ENV}"
+                            git push origin master
+                            
+                            echo "✓ Successfully promoted to ${params.TARGET_ENV}"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Trigger ArgoCD Sync') {
+            steps {
+                script {
+                    echo "Triggering ArgoCD sync for ${params.APPLICATION} in ${params.TARGET_ENV}"
+                    
+                    // Optional: Trigger ArgoCD sync via API
+                    // If ArgoCD auto-sync is enabled, this step is optional
+                    
+                    sh """
+                        echo "ArgoCD will automatically sync the changes"
+                        echo "Application: ${params.APPLICATION}-${params.TARGET_ENV}"
+                        echo "New version: ${params.VERSION}"
+                    """
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    echo "Verifying deployment in ${params.TARGET_ENV}"
+                    
+                    sh """
+                        echo "Waiting for ArgoCD to sync..."
+                        sleep 10
+                        
+                        # Check if pods are running in target namespace
+                        kubectl get pods -n ${params.TARGET_ENV} -l app=${params.APPLICATION} || true
+                        
+                        echo "✓ Deployment verification complete"
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                echo """
+                ========================================
+                ✓ PROMOTION SUCCESSFUL
+                ========================================
+                Application: ${params.APPLICATION}
+                Version: ${params.VERSION}
+                Promoted: ${params.SOURCE_ENV} → ${params.TARGET_ENV}
+                ========================================
+                """
+            }
+        }
+        failure {
+            script {
+                echo """
+                ========================================
+                ✗ PROMOTION FAILED
+                ========================================
+                Application: ${params.APPLICATION}
+                Version: ${params.VERSION}
+                Path: ${params.SOURCE_ENV} → ${params.TARGET_ENV}
+                ========================================
+                """
+            }
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

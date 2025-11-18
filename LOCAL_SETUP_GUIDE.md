@@ -237,76 +237,7 @@ kubectl apply -f infra/local/local-storage.yaml
 ```bash
 # Create local Jenkins values
 cat > jenkins/helm/values-local.yaml <<EOF
-jenkins:
-  name: jenkins
-  namespace: jenkins
-  replicas: 1
-  
-  image: jenkins/jenkins
-  tag: lts-jdk17
-  imagePullPolicy: IfNotPresent
-  
-  serviceAccount: jenkins
-  
-  javaOpts: "-Xmx1024m -Xms512m -Djenkins.install.runSetupWizard=false"
-  
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      cpu: 2000m
-      memory: 2Gi
-  
-  service:
-    type: NodePort
-    nodePort: 30000
-  
-  persistence:
-    enabled: true
-    claimName: jenkins-pvc
-    size: 20Gi
-    storageClass: local-storage
-  
-  ingress:
-    enabled: false
-  
-  casc:
-    config: |
-      jenkins:
-        systemMessage: "Jenkins GitOps Platform - Local Development"
-        numExecutors: 2
-        mode: NORMAL
-        securityRealm:
-          local:
-            allowsSignup: false
-        authorizationStrategy:
-          loggedInUsersCanDoAnything:
-            allowAnonymousRead: false
-        clouds:
-          - kubernetes:
-              name: kubernetes
-              serverUrl: https://kubernetes.default
-              namespace: jenkins
-              jenkinsUrl: http://jenkins:8080
-              jenkinsTunnel: jenkins:50000
-              containerCapStr: 5
-              templates:
-                - name: jnlp-agent
-                  namespace: jenkins
-                  label: jnlp-agent
-                  containers:
-                    - name: jnlp
-                      image: jenkins/inbound-agent:latest
-                      workingDir: /home/jenkins/agent
-                      ttyEnabled: true
-                      resourceRequestCpu: 100m
-                      resourceRequestMemory: 128Mi
-                      resourceLimitCpu: 500m
-                      resourceLimitMemory: 512Mi
-      unclassified:
-        location:
-          url: http://localhost:30000
+git
 EOF
 ```
 
@@ -328,7 +259,7 @@ git commit -m "Initial commit: Jenkins GitOps Platform - Local Setup"
 
 # Create repository on GitHub
 # Option 1: Using GitHub CLI
-gh repo create jenkins-gitops-platform --public --source=. --remote=origin --push
+git repo create jenkins-gitops-platform --public --source=. --remote=origin --push
 
 # Option 2: Manual
 # 1. Go to https://github.com/new
@@ -349,7 +280,7 @@ YOUR_GITHUB_USER="YOUR_USERNAME"  # Change this!
 sed -i '' "s|https://github.com/your-org/jenkins-gitops-platform|https://github.com/$YOUR_GITHUB_USER/jenkins-gitops-platform|g" argocd/*.yaml
 
 # Update Jenkins JCasC files
-find jenkins/jcasc -name "*.yaml" -exec sed -i '' "s|https://github.com/your-org/jenkins-gitops-platform|https://github.com/$YOUR_GITHUB_USER/jenkins-gitops-platform|g" {} +
+find jenkins/jcasc -name "*.yaml" -exec sed -i '' "s|https://github.com/your-org/jenkins-gitops-platform|https://github.com/pkalbande/jenkins-gitops-platform|g" {} +
 
 # Commit changes
 git add .
@@ -391,7 +322,7 @@ ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret \
 echo "======================================"
 echo "ArgoCD Admin Credentials:"
 echo "Username: admin"
-echo "Password: $ARGOCD_PASSWORD"
+echo "Password: $ARGOCD_PASSWORD" 
 echo "======================================"
 
 # Port-forward ArgoCD server
@@ -473,8 +404,22 @@ kubectl create secret generic argocd-token \
 ### Step 12: Deploy Jenkins using Helm
 
 ```bash
-# Apply storage first
+# Apply storage first (skip if already done in Step 5)
 kubectl apply -f infra/local/local-storage.yaml
+
+# Fix permissions on the Jenkins home directory for Minikube
+# This is required because the hostPath volume needs correct permissions
+if command -v minikube &> /dev/null; then
+  echo "Setting up Jenkins home directory permissions for Minikube..."
+  minikube ssh "sudo mkdir -p /data/jenkins && sudo chmod -R 777 /data/jenkins"
+fi
+
+# For Kind, we need to fix permissions inside the container
+if command -v kind &> /dev/null && kind get clusters 2>/dev/null | grep -q jenkins-gitops; then
+  echo "Setting up Jenkins home directory permissions for Kind..."
+  docker exec jenkins-gitops-control-plane mkdir -p /data/jenkins
+  docker exec jenkins-gitops-control-plane chmod -R 777 /data/jenkins
+fi
 
 # Deploy Jenkins with local values
 helm install jenkins ./jenkins/helm \
@@ -785,19 +730,32 @@ exit
 # Update image references to use host.docker.internal:5000 for Minikube
 ```
 
-### Issue: Jenkins pod stuck in pending
+### Issue: Jenkins pod stuck in pending or CrashLoopBackOff
 
 ```bash
+# Check pod status
+kubectl get pods -n jenkins
+kubectl logs -n jenkins -l app=jenkins --tail=50
+
+# Common issue: Permission denied on /var/jenkins_home
+# Fix for Kind cluster:
+CONTAINER_NAME=$(docker ps --filter "name=kind" --format "{{.Names}}" | head -1)
+docker exec $CONTAINER_NAME mkdir -p /data/jenkins
+docker exec $CONTAINER_NAME chmod -R 777 /data/jenkins
+
+# Fix for Minikube:
+minikube ssh "sudo mkdir -p /data/jenkins && sudo chmod -R 777 /data/jenkins"
+
+# Reinstall Jenkins
+helm uninstall jenkins -n jenkins
+helm install jenkins ./jenkins/helm -f jenkins/helm/values-local.yaml -n jenkins
+
 # Check PV/PVC status
 kubectl get pv
 kubectl get pvc -n jenkins
 
 # Check events
 kubectl describe pvc jenkins-pvc -n jenkins
-
-# Delete and recreate storage
-kubectl delete -f infra/local/local-storage.yaml
-kubectl apply -f infra/local/local-storage.yaml
 ```
 
 ### Issue: ArgoCD can't sync from Git
