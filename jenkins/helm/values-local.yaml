@@ -11,45 +11,45 @@ jenkins:
   
   javaOpts: "-Xmx1024m -Xms512m -Djenkins.install.runSetupWizard=false"
   
-  # Jenkins plugins to install
+  # Jenkins plugins to install (using 'latest' for compatibility)
   plugins:
     # Core plugins
-    - kubernetes:4252.v6f5a_b_fc1b_b_97
-    - workflow-aggregator:600.vb_57cdd26fdd7
-    - git:5.6.0
-    - configuration-as-code:1850.va_a_8c31d3158b_
-    - job-dsl:1.89
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+    - job-dsl:latest
     
     # Build and Release plugins
-    - pipeline-stage-view:2.34
-    - pipeline-graph-view:406.vd1b_396fe74e4
-    - build-pipeline-plugin:1.5.8
-    - delivery-pipeline-plugin:1.7.0
+    - pipeline-stage-view:latest
+    - pipeline-graph-view:latest
+    - build-pipeline-plugin:latest
+    - delivery-pipeline-plugin:latest
     
     # Promotion plugin
-    - promoted-builds:999.vcf8f4b_37de1f
+    - promoted-builds:latest
     
     # SCM plugins
-    - github:1.40.0
-    - github-branch-source:1797.v86fdb_4d57d43
+    - github:latest
+    - github-branch-source:latest
     
     # Docker plugins
-    - docker-workflow:580.vc0c340686b_54
-    - docker-plugin:1.7.0
+    - docker-workflow:latest
+    - docker-plugin:latest
     
     # Kubernetes plugins
-    - kubernetes-credentials-provider:1.262.v2670ef7ea_0c5
+    - kubernetes-credentials-provider:latest
     
     # Utility plugins
-    - credentials:1400.v7fd8f6b_ec501
-    - credentials-binding:696.v778d637b_a_762
-    - plain-credentials:183.va_de8f1dd5a_2b_
-    - ssh-credentials:351.v8b_8e8b_5b_9a_46
-    - timestamper:1.27
-    - ws-cleanup:0.47
-    - ansicolor:1.0.4
-    - build-timeout:1.33
-    - email-ext:1879.vf07de2f63df3
+    - credentials:latest
+    - credentials-binding:latest
+    - plain-credentials:latest
+    - ssh-credentials:latest
+    - timestamper:latest
+    - ws-cleanup:latest
+    - ansicolor:latest
+    - build-timeout:latest
+    - email-ext:latest
   
   resources:
     requests:
