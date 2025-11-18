@@ -13,6 +13,9 @@ jenkins:
   
   # Jenkins plugins - will be installed on first boot via install-plugins.txt
   installPlugins: true
+  additionalPlugins:
+    - release:2.12
+    - promoted-builds:876.v99d29788b_36b_
   
   resources:
     requests:
