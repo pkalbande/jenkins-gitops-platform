@@ -1,0 +1,53 @@
+jenkins:
+  installPlugins:
+    # Core plugins
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+    - job-dsl:latest
+    
+    # Pipeline plugins
+    - pipeline-stage-view:latest
+    - pipeline-utility-steps:latest
+    - pipeline-github-lib:latest
+    - pipeline-graph-analysis:latest
+    
+    # Docker plugins
+    - docker-workflow:latest
+    - docker-plugin:latest
+    - amazon-ecr:latest
+    
+    # SCM plugins
+    - github:latest
+    - github-branch-source:latest
+    - gitlab-plugin:latest
+    
+    # Build & Deploy
+    - kubernetes-cli:latest
+    - helm:latest
+    - ansible:latest
+    
+    # UI & Visualization
+    - blueocean:latest
+    - dashboard-view:latest
+    - build-monitor-plugin:latest
+    
+    # Security
+    - credentials-binding:latest
+    - credentials:latest
+    - oauth-credentials:latest
+    - role-strategy:latest
+    
+    # Monitoring
+    - prometheus:latest
+    - monitoring:latest
+    - metrics:latest
+    
+    # Utilities
+    - timestamper:latest
+    - ws-cleanup:latest
+    - ansicolor:latest
+    - build-timeout:latest
+    - slack:latest
+    - email-ext:latest

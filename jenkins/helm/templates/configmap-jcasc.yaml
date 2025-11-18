@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jenkins-casc-config
+  namespace: {{ .Values.jenkins.namespace }}
+data:
+  jenkins.yaml: |
+    {{- .Values.jenkins.casc.config | nindent 4 }}

@@ -1,0 +1,13 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: aws.io/aws-efs
+parameters:
+  gidMin: "40000"
+  gidMax: "50000"
+  gidAllocate: "true"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+mountOptions:
+  - tls

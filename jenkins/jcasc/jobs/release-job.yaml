@@ -1,0 +1,56 @@
+jobs:
+  - script: |
+      folder('Release') {
+        displayName('Release Pipelines')
+        description('Pipelines for building and releasing applications')
+      }
+      
+      pipelineJob('Release/app1-release') {
+        description('Build and release pipeline for app1-node')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  credentials('github-token')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/pipelines/release-build/Jenkinsfile')
+          }
+        }
+        parameters {
+          stringParam('APP_NAME', 'app1-node', 'Application name')
+          stringParam('GIT_TAG', '', 'Git tag for the release')
+        }
+        triggers {
+          githubPush()
+        }
+      }
+      
+      pipelineJob('Release/app2-release') {
+        description('Build and release pipeline for app2-python')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  credentials('github-token')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/pipelines/release-build/Jenkinsfile')
+          }
+        }
+        parameters {
+          stringParam('APP_NAME', 'app2-python', 'Application name')
+          stringParam('GIT_TAG', '', 'Git tag for the release')
+        }
+        triggers {
+          githubPush()
+        }
+      }

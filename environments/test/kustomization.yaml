@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: test
+
+resources:
+  - namespace.yaml
+
+helmCharts:
+  - name: app1
+    repo: oci://localhost:5000/helm-charts
+    version: 1.0.0
+    releaseName: app1-node
+    namespace: test
+    valuesFile: app1-values.yaml
+  
+  - name: app2
+    repo: oci://localhost:5000/helm-charts
+    version: 1.0.0
+    releaseName: app2-python
+    namespace: test
+    valuesFile: app2-values.yaml
+
+commonLabels:
+  environment: test
+  managed-by: kustomize
+
+commonAnnotations:
+  team: platform
+  tier: test

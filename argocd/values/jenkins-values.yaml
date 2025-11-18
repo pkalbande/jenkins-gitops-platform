@@ -1,0 +1,54 @@
+jenkins:
+  controller:
+    image: "jenkins/jenkins"
+    tag: "lts-jdk17"
+    
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+    
+    serviceType: ClusterIP
+    
+    installPlugins:
+      - kubernetes:latest
+      - workflow-aggregator:latest
+      - git:latest
+      - configuration-as-code:latest
+      - job-dsl:latest
+      - pipeline-utility-steps:latest
+      - docker-workflow:latest
+      - blueocean:latest
+      - credentials-binding:latest
+      - github:latest
+      - prometheus:latest
+    
+    JCasC:
+      enabled: true
+      configScripts:
+        jenkins-config: |
+          jenkins:
+            systemMessage: "Jenkins GitOps Platform - Managed by ArgoCD"
+    
+    persistence:
+      enabled: true
+      storageClass: "efs-sc"
+      size: "20Gi"
+      accessMode: ReadWriteMany
+
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:region:account:certificate/id
+    hosts:
+      - jenkins.yourdomain.com
+    tls:
+      - secretName: jenkins-tls
+        hosts:
+          - jenkins.yourdomain.com

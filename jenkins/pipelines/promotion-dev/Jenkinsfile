@@ -1,0 +1,87 @@
+pipeline {
+    agent {
+        kubernetes {
+            label 'docker'
+            defaultContainer 'docker'
+        }
+    }
+    
+    parameters {
+        string(name: 'APP_NAME', defaultValue: '', description: 'Application name (e.g., app1-node, app2-python)')
+        string(name: 'VERSION', defaultValue: '', description: 'Version to promote')
+    }
+    
+    environment {
+        DOCKER_REGISTRY = 'your-registry.azurecr.io'
+        ENVIRONMENT = 'dev'
+        GIT_REPO = 'https://github.com/your-org/jenkins-gitops-platform.git'
+    }
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "Validating release: ${params.APP_NAME}:${params.VERSION}"
+                    sh './jenkins/pipelines/promotion-dev/validate-release.sh'
+                }
+            }
+        }
+        
+        stage('Update Manifest') {
+            steps {
+                script {
+                    echo "Updating environment manifest for DEV"
+                    
+                    // Clone the GitOps repo
+                    sh """
+                        git config --global user.email "jenkins@yourdomain.com"
+                        git config --global user.name "Jenkins GitOps"
+                    """
+                    
+                    // Update image tag in values file
+                    sh """
+                        yq eval '.image.tag = "${params.VERSION}"' -i environments/dev/${params.APP_NAME}-values.yaml
+                        git add environments/dev/${params.APP_NAME}-values.yaml
+                        git commit -m "Promote ${params.APP_NAME}:${params.VERSION} to DEV"
+                        git push origin main
+                    """
+                }
+            }
+        }
+        
+        stage('Sync ArgoCD') {
+            steps {
+                script {
+                    echo "Triggering ArgoCD sync for ${params.APP_NAME} in DEV"
+                    
+                    sh """
+                        argocd app sync ${params.APP_NAME}-dev --force
+                        argocd app wait ${params.APP_NAME}-dev --health
+                    """
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    echo "Verifying deployment in DEV environment"
+                    
+                    sh """
+                        kubectl get pods -n dev -l app=${params.APP_NAME}
+                        kubectl rollout status deployment/${params.APP_NAME} -n dev
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Successfully promoted ${params.APP_NAME}:${params.VERSION} to DEV"
+        }
+        failure {
+            echo "Failed to promote ${params.APP_NAME}:${params.VERSION} to DEV"
+        }
+    }
+}

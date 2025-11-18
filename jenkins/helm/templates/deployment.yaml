@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.jenkins.name }}
+  namespace: {{ .Values.jenkins.namespace }}
+  labels:
+    app: jenkins
+spec:
+  replicas: {{ .Values.jenkins.replicas }}
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      serviceAccountName: {{ .Values.jenkins.serviceAccount }}
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: jenkins
+          image: "{{ .Values.jenkins.image }}:{{ .Values.jenkins.tag }}"
+          imagePullPolicy: {{ .Values.jenkins.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: jnlp
+              containerPort: 50000
+              protocol: TCP
+          env:
+            - name: JAVA_OPTS
+              value: "{{ .Values.jenkins.javaOpts }}"
+            - name: CASC_JENKINS_CONFIG
+              value: /var/jenkins_home/casc_configs
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
+            - name: jenkins-casc-config
+              mountPath: /var/jenkins_home/casc_configs
+          resources:
+            {{- toYaml .Values.jenkins.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: jenkins-home
+          persistentVolumeClaim:
+            claimName: {{ .Values.jenkins.persistence.claimName }}
+        - name: jenkins-casc-config
+          configMap:
+            name: jenkins-casc-config

@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: prod
+
+resources:
+  - namespace.yaml
+
+helmCharts:
+  - name: app1
+    repo: oci://localhost:5000/helm-charts
+    version: 1.0.0
+    releaseName: app1-node
+    namespace: prod
+    valuesFile: app1-values.yaml
+  
+  - name: app2
+    repo: oci://localhost:5000/helm-charts
+    version: 1.0.0
+    releaseName: app2-python
+    namespace: prod
+    valuesFile: app2-values.yaml
+
+commonLabels:
+  environment: prod
+  managed-by: kustomize
+
+commonAnnotations:
+  team: platform
+  tier: production

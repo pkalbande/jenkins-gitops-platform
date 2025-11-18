@@ -1,0 +1,70 @@
+jenkins:
+  name: jenkins
+  namespace: jenkins
+  replicas: 1
+  
+  image: jenkins/jenkins
+  tag: lts-jdk17
+  imagePullPolicy: IfNotPresent
+  
+  serviceAccount: jenkins
+  
+  javaOpts: "-Xmx1024m -Xms512m -Djenkins.install.runSetupWizard=false"
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  
+  service:
+    type: NodePort
+    nodePort: 30000
+  
+  persistence:
+    enabled: true
+    claimName: jenkins-pvc
+    size: 20Gi
+    storageClass: local-storage
+  
+  ingress:
+    enabled: false
+  
+  casc:
+    config: |
+      jenkins:
+        systemMessage: "Jenkins GitOps Platform - Local Development"
+        numExecutors: 2
+        mode: NORMAL
+        securityRealm:
+          local:
+            allowsSignup: false
+        authorizationStrategy:
+          loggedInUsersCanDoAnything:
+            allowAnonymousRead: false
+        clouds:
+          - kubernetes:
+              name: kubernetes
+              serverUrl: https://kubernetes.default
+              namespace: jenkins
+              jenkinsUrl: http://jenkins:8080
+              jenkinsTunnel: jenkins:50000
+              containerCapStr: 5
+              templates:
+                - name: jnlp-agent
+                  namespace: jenkins
+                  label: jnlp-agent
+                  containers:
+                    - name: jnlp
+                      image: jenkins/inbound-agent:latest
+                      workingDir: /home/jenkins/agent
+                      ttyEnabled: true
+                      resourceRequestCpu: 100m
+                      resourceRequestMemory: 128Mi
+                      resourceLimitCpu: 500m
+                      resourceLimitMemory: 512Mi
+      unclassified:
+        location:
+          url: http://localhost:30000

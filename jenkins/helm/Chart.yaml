@@ -1,0 +1,16 @@
+apiVersion: v2
+name: jenkins
+description: A Helm chart for Jenkins with GitOps configuration
+type: application
+version: 1.0.0
+appVersion: "2.426.1"
+
+keywords:
+  - jenkins
+  - ci
+  - cd
+  - gitops
+
+maintainers:
+  - name: Platform Team
+    email: platform@yourdomain.com

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: app2
+description: A Helm chart for App2 Python application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - python
+  - flask
+
+maintainers:
+  - name: Platform Team
+    email: platform@yourdomain.com

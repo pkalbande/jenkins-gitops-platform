@@ -1,0 +1,117 @@
+pipeline {
+    agent {
+        kubernetes {
+            label 'docker'
+            defaultContainer 'docker'
+        }
+    }
+    
+    parameters {
+        string(name: 'APP_NAME', defaultValue: '', description: 'Application name')
+        string(name: 'VERSION', defaultValue: '', description: 'Version to promote')
+        booleanParam(name: 'REQUIRE_APPROVAL', defaultValue: true, description: 'Require manual approval')
+    }
+    
+    environment {
+        DOCKER_REGISTRY = 'your-registry.azurecr.io'
+        ENVIRONMENT = 'prod'
+    }
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "Validating release for PRODUCTION: ${params.APP_NAME}:${params.VERSION}"
+                    sh './jenkins/pipelines/promotion-dev/validate-release.sh'
+                }
+            }
+        }
+        
+        stage('Approval Gate') {
+            when {
+                expression { params.REQUIRE_APPROVAL == true }
+            }
+            steps {
+                script {
+                    timeout(time: 24, unit: 'HOURS') {
+                        input(
+                            message: "Approve deployment of ${params.APP_NAME}:${params.VERSION} to PRODUCTION?",
+                            ok: 'Deploy to Production',
+                            submitter: 'admin'
+                        )
+                    }
+                }
+            }
+        }
+        
+        stage('Backup Current State') {
+            steps {
+                script {
+                    echo "Creating backup of current production state"
+                    sh """
+                        kubectl get deployment ${params.APP_NAME} -n prod -o yaml > backup-${params.APP_NAME}-\$(date +%Y%m%d-%H%M%S).yaml
+                    """
+                }
+            }
+        }
+        
+        stage('Update Manifest') {
+            steps {
+                script {
+                    sh """
+                        git config --global user.email "jenkins@yourdomain.com"
+                        git config --global user.name "Jenkins GitOps"
+                        
+                        yq eval '.image.tag = "${params.VERSION}"' -i environments/prod/${params.APP_NAME}-values.yaml
+                        git add environments/prod/${params.APP_NAME}-values.yaml
+                        git commit -m "Promote ${params.APP_NAME}:${params.VERSION} to PRODUCTION"
+                        git push origin main
+                    """
+                }
+            }
+        }
+        
+        stage('Sync ArgoCD') {
+            steps {
+                script {
+                    sh """
+                        argocd app sync ${params.APP_NAME}-prod --force
+                        argocd app wait ${params.APP_NAME}-prod --health --timeout 600
+                    """
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    echo "Verifying production deployment"
+                    sh """
+                        kubectl get pods -n prod -l app=${params.APP_NAME}
+                        kubectl rollout status deployment/${params.APP_NAME} -n prod --timeout=5m
+                    """
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                script {
+                    echo "Running production health checks"
+                    // Add production health check commands
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "✓ Successfully deployed ${params.APP_NAME}:${params.VERSION} to PRODUCTION"
+            // Send success notification
+        }
+        failure {
+            echo "✗ Failed to deploy ${params.APP_NAME}:${params.VERSION} to PRODUCTION"
+            // Send failure notification and trigger rollback if needed
+        }
+    }
+}

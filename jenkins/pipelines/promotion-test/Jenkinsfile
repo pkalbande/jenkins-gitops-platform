@@ -1,0 +1,74 @@
+pipeline {
+    agent {
+        kubernetes {
+            label 'docker'
+            defaultContainer 'docker'
+        }
+    }
+    
+    parameters {
+        string(name: 'APP_NAME', defaultValue: '', description: 'Application name')
+        string(name: 'VERSION', defaultValue: '', description: 'Version to promote')
+    }
+    
+    environment {
+        DOCKER_REGISTRY = 'your-registry.azurecr.io'
+        ENVIRONMENT = 'test'
+    }
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "Validating release for TEST: ${params.APP_NAME}:${params.VERSION}"
+                    sh './jenkins/pipelines/promotion-dev/validate-release.sh'
+                }
+            }
+        }
+        
+        stage('Update Manifest') {
+            steps {
+                script {
+                    sh """
+                        git config --global user.email "jenkins@yourdomain.com"
+                        git config --global user.name "Jenkins GitOps"
+                        
+                        yq eval '.image.tag = "${params.VERSION}"' -i environments/test/${params.APP_NAME}-values.yaml
+                        git add environments/test/${params.APP_NAME}-values.yaml
+                        git commit -m "Promote ${params.APP_NAME}:${params.VERSION} to TEST"
+                        git push origin main
+                    """
+                }
+            }
+        }
+        
+        stage('Sync ArgoCD') {
+            steps {
+                script {
+                    sh """
+                        argocd app sync ${params.APP_NAME}-test --force
+                        argocd app wait ${params.APP_NAME}-test --health
+                    """
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                script {
+                    echo "Running integration tests in TEST environment"
+                    // Add your test commands here
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Successfully promoted ${params.APP_NAME}:${params.VERSION} to TEST"
+        }
+        failure {
+            echo "Failed to promote ${params.APP_NAME}:${params.VERSION} to TEST"
+        }
+    }
+}

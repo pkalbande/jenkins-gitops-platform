@@ -1,0 +1,50 @@
+jenkins:
+  systemMessage: |
+    Welcome to Jenkins GitOps Platform
+    Managed by Configuration as Code (JCasC)
+    
+    This Jenkins instance is configured entirely through code.
+    Any manual changes will be overwritten on restart.
+
+unclassified:
+  globalConfigFiles:
+    configs:
+      - globalMavenSettings:
+          id: "maven-settings"
+          name: "Maven Global Settings"
+          comment: "Global Maven settings"
+          content: |
+            <?xml version="1.0" encoding="UTF-8"?>
+            <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+              <mirrors>
+                <mirror>
+                  <id>central</id>
+                  <url>https://repo.maven.apache.org/maven2</url>
+                  <mirrorOf>central</mirrorOf>
+                </mirror>
+              </mirrors>
+            </settings>
+      
+      - custom:
+          id: "kubectl-config"
+          name: "Kubectl Config Script"
+          comment: "Kubectl configuration helper"
+          content: |
+            #!/bin/bash
+            export KUBECONFIG=/tmp/kubeconfig
+            kubectl version --client
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+  
+  dockerTool:
+    installations:
+      - name: "docker"
+        properties:
+          - installSource:
+              installers:
+                - fromDocker:
+                    version: "latest"

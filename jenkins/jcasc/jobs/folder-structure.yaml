@@ -1,0 +1,21 @@
+jobs:
+  - script: |
+      folder('GitOps') {
+        displayName('GitOps Platform')
+        description('Root folder for all GitOps pipelines')
+      }
+      
+      folder('GitOps/Applications') {
+        displayName('Applications')
+        description('Application-specific pipelines')
+      }
+      
+      folder('GitOps/Infrastructure') {
+        displayName('Infrastructure')
+        description('Infrastructure management pipelines')
+      }
+      
+      folder('GitOps/Monitoring') {
+        displayName('Monitoring')
+        description('Monitoring and observability pipelines')
+      }

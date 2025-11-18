@@ -1,0 +1,115 @@
+jobs:
+  - script: |
+      folder('Promotion') {
+        displayName('Environment Promotion Pipelines')
+        description('Pipelines for promoting releases across environments')
+      }
+      
+      folder('Promotion/DEV') {
+        displayName('DEV Environment')
+        description('Promotion pipelines for DEV environment')
+      }
+      
+      folder('Promotion/TEST') {
+        displayName('TEST Environment')
+        description('Promotion pipelines for TEST environment')
+      }
+      
+      folder('Promotion/STAGE') {
+        displayName('STAGE Environment')
+        description('Promotion pipelines for STAGE environment')
+      }
+      
+      folder('Promotion/PROD') {
+        displayName('PROD Environment')
+        description('Promotion pipelines for PROD environment')
+      }
+      
+      pipelineJob('Promotion/DEV/promote-to-dev') {
+        description('Promote application to DEV environment')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  credentials('github-token')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/pipelines/promotion-dev/Jenkinsfile')
+          }
+        }
+        parameters {
+          stringParam('APP_NAME', '', 'Application name')
+          stringParam('VERSION', '', 'Version to promote')
+        }
+      }
+      
+      pipelineJob('Promotion/TEST/promote-to-test') {
+        description('Promote application to TEST environment')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  credentials('github-token')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/pipelines/promotion-test/Jenkinsfile')
+          }
+        }
+        parameters {
+          stringParam('APP_NAME', '', 'Application name')
+          stringParam('VERSION', '', 'Version to promote')
+        }
+      }
+      
+      pipelineJob('Promotion/STAGE/promote-to-stage') {
+        description('Promote application to STAGE environment')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  credentials('github-token')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/pipelines/promotion-stage/Jenkinsfile')
+          }
+        }
+        parameters {
+          stringParam('APP_NAME', '', 'Application name')
+          stringParam('VERSION', '', 'Version to promote')
+        }
+      }
+      
+      pipelineJob('Promotion/PROD/promote-to-prod') {
+        description('Promote application to PROD environment')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/your-org/jenkins-gitops-platform.git')
+                  credentials('github-token')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/pipelines/promotion-prod/Jenkinsfile')
+          }
+        }
+        parameters {
+          stringParam('APP_NAME', '', 'Application name')
+          stringParam('VERSION', '', 'Version to promote')
+          booleanParam('REQUIRE_APPROVAL', true, 'Require manual approval before deployment')
+        }
+      }
