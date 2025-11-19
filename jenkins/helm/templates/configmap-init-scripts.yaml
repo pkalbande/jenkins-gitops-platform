@@ -9,13 +9,6 @@ metadata:
 data:
   01-create-seed-job.groovy: |
     import jenkins.model.Jenkins
-    import hudson.model.FreeStyleProject
-    import hudson.plugins.git.GitSCM
-    import hudson.plugins.git.UserRemoteConfig
-    import hudson.plugins.git.BranchSpec
-    import javaposse.jobdsl.plugin.ExecuteDslScripts
-    import javaposse.jobdsl.plugin.RemovedJobAction
-    import javaposse.jobdsl.plugin.LookupStrategy
 
     def jenkins = Jenkins.instance
     def jobName = 'seed-job'
@@ -27,32 +20,52 @@ data:
         return
     }
 
-    println "🌱 Creating seed job '${jobName}'..."
+    println "🌱 Creating seed job '${jobName}' using XML configuration..."
 
-    // Create freestyle project
-    def seedJob = jenkins.createProject(FreeStyleProject, jobName)
-    seedJob.setDisplayName('🌱 DSL Seed Job')
-    seedJob.setDescription('Seed job that creates other Jenkins jobs from DSL scripts in Git')
+    // Create job from XML
+    def xml = '''<?xml version='1.1' encoding='UTF-8'?>
+    <project>
+      <description>Seed job that creates other Jenkins jobs from DSL scripts in Git</description>
+      <keepDependencies>false</keepDependencies>
+      <properties/>
+      <scm class="hudson.plugins.git.GitSCM">
+        <configVersion>2</configVersion>
+        <userRemoteConfigs>
+          <hudson.plugins.git.UserRemoteConfig>
+            <url>https://github.com/pkalbande/jenkins-gitops-platform.git</url>
+            <credentialsId>github-token</credentialsId>
+          </hudson.plugins.git.UserRemoteConfig>
+        </userRemoteConfigs>
+        <branches>
+          <hudson.plugins.git.BranchSpec>
+            <name>*/master</name>
+          </hudson.plugins.git.BranchSpec>
+        </branches>
+      </scm>
+      <canRoam>true</canRoam>
+      <disabled>false</disabled>
+      <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+      <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+      <triggers/>
+      <concurrentBuild>false</concurrentBuild>
+      <builders>
+        <javaposse.jobdsl.plugin.ExecuteDslScripts>
+          <targets>jenkins/dsl/jobs.groovy</targets>
+          <usingScriptText>false</usingScriptText>
+          <sandbox>false</sandbox>
+          <removedJobAction>IGNORE</removedJobAction>
+          <removedViewAction>IGNORE</removedViewAction>
+          <removedConfigFilesAction>IGNORE</removedConfigFilesAction>
+          <lookupStrategy>JENKINS_ROOT</lookupStrategy>
+        </javaposse.jobdsl.plugin.ExecuteDslScripts>
+      </builders>
+      <publishers/>
+      <buildWrappers/>
+    </project>'''
 
-    // Configure Git SCM
-    def gitUrl = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
-    def credentialsId = 'github-token'
-    def branch = '*/master'
-
-    def userRemoteConfig = new UserRemoteConfig(gitUrl, '', '', credentialsId)
-    def branchSpec = new BranchSpec(branch)
-    def scm = new GitSCM([userRemoteConfig], [branchSpec], null, null, [])
-    seedJob.setScm(scm)
-
-    // Add DSL build step
-    def dslBuilder = new ExecuteDslScripts()
-    dslBuilder.setTargets('jenkins/dsl/jobs.groovy')
-    dslBuilder.setRemovedJobAction(RemovedJobAction.IGNORE)
-    dslBuilder.setLookupStrategy(LookupStrategy.JENKINS_ROOT)
-    seedJob.getBuildersList().add(dslBuilder)
-
-    // Save job
-    seedJob.save()
+    // Create job from XML
+    def xmlStream = new ByteArrayInputStream(xml.getBytes())
+    jenkins.createProjectFromXML(jobName, xmlStream)
 
     println "✅ Seed job '${jobName}' created successfully!"
-    println "🎯 To create the other jobs, trigger this seed job manually or via API"
+    println "🎯 Jenkins will now execute the DSL script to create other jobs"
