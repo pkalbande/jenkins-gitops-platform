@@ -77,8 +77,24 @@ jenkins:
       
       jobs:
         - script: >
-            pipelineJob('release-job') {
-              description('Jenkins Release Job - Build and publish artifacts')
+            pipelineJob('release-build-job') {
+              description('Release Build Job - Build code, create versioned release, and archive artifacts')
+              displayName('Release Build Job')
+              properties {
+                buildDiscarder {
+                  strategy {
+                    logRotator {
+                      numToKeepStr('10')
+                      artifactNumToKeepStr('10')
+                    }
+                  }
+                }
+              }
+              parameters {
+                choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to build')
+                string(name: 'VERSION', defaultValue: '1.0.0', description: 'Version number for the release (e.g., 1.0.0)')
+                booleanParam(name: 'DEPLOY_TO_DEV', defaultValue: true, description: 'Deploy to dev environment after build')
+              }
               definition {
                 cpsScm {
                   scm {
@@ -97,7 +113,23 @@ jenkins:
         
         - script: >
             pipelineJob('promotion-orchestrator-job') {
-              description('Promotion Orchestrator Job - Manage environment promotions')
+              description('Promotion Orchestrator Job - Select and promote previous builds across environments')
+              displayName('Promotion Orchestrator Job')
+              properties {
+                buildDiscarder {
+                  strategy {
+                    logRotator {
+                      numToKeepStr('20')
+                    }
+                  }
+                }
+              }
+              parameters {
+                choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to promote')
+                string(name: 'VERSION', defaultValue: '', description: 'Version to promote (e.g., 1.0.0)')
+                choice(name: 'SOURCE_ENV', choices: ['dev', 'test', 'stage'], description: 'Source environment')
+                choice(name: 'TARGET_ENV', choices: ['test', 'stage', 'prod'], description: 'Target environment')
+              }
               definition {
                 cpsScm {
                   scm {
@@ -111,12 +143,6 @@ jenkins:
                   }
                   scriptPath('jenkins/pipelines/promotion-orchestrator/Jenkinsfile')
                 }
-              }
-              parameters {
-                stringParam('SOURCE_ENV', 'dev', 'Source environment (dev, test, stage)')
-                stringParam('TARGET_ENV', 'test', 'Target environment (test, stage, prod)')
-                stringParam('APPLICATION', 'app1', 'Application name (app1, app2)')
-                stringParam('VERSION', '', 'Version/tag to promote')
               }
             }
       

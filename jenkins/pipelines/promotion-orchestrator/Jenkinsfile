@@ -1,3 +1,5 @@
+import hudson.model.*
+
 pipeline {
     agent {
         kubernetes {
@@ -20,6 +22,43 @@ pipeline {
     }
     
     stages {
+        stage('List Available Builds') {
+            steps {
+                script {
+                    echo "=== Available Builds for Promotion ==="
+                    
+                    // List recent successful builds from release-build-job
+                    try {
+                        def releaseJob = Jenkins.instance.getItemByFullName('release-build-job')
+                        if (releaseJob) {
+                            def builds = releaseJob.getBuilds().findAll { 
+                                it.result == hudson.model.Result.SUCCESS 
+                            }.take(10)
+                            
+                            echo "\nRecent successful release builds:"
+                            echo "=================================="
+                            builds.each { build ->
+                                def params = build.getAction(ParametersAction)
+                                def app = params?.getParameter('APPLICATION')?.value
+                                def version = params?.getParameter('VERSION')?.value
+                                if (app && version) {
+                                    echo "#${build.number} - ${app}:${version} (${build.time})"
+                                }
+                            }
+                            echo "==================================\n"
+                        }
+                    } catch (Exception e) {
+                        echo "Note: Could not fetch release build history: ${e.message}"
+                    }
+                    
+                    echo "Selected for promotion:"
+                    echo "  Application: ${params.APPLICATION}"
+                    echo "  Version: ${params.VERSION}"
+                    echo "  Path: ${params.SOURCE_ENV} → ${params.TARGET_ENV}"
+                }
+            }
+        }
+        
         stage('Validate Parameters') {
             steps {
                 script {

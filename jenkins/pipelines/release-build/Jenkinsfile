@@ -146,6 +146,57 @@ pipeline {
             }
         }
         
+        stage('Archive Artifacts') {
+            steps {
+                script {
+                    echo "Archiving release artifacts..."
+                    
+                    sh """
+                        # Create artifacts directory
+                        mkdir -p artifacts
+                        
+                        # Save build metadata
+                        cat > artifacts/release-metadata.json <<EOF
+{
+  "application": "${params.APPLICATION}",
+  "version": "${params.VERSION}",
+  "buildNumber": "${env.BUILD_NUMBER}",
+  "buildTimestamp": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "gitCommit": "\$(git rev-parse HEAD)",
+  "gitTag": "${params.APPLICATION}-${params.VERSION}",
+  "dockerImage": "${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION}",
+  "deployedToDev": ${params.DEPLOY_TO_DEV},
+  "builtBy": "Jenkins Release Job"
+}
+EOF
+                        
+                        # Save Dockerfile
+                        cp apps/${params.APPLICATION}/Dockerfile artifacts/
+                        
+                        # Create release notes
+                        cat > artifacts/RELEASE_NOTES.txt <<EOF
+Release: ${params.APPLICATION} v${params.VERSION}
+Build Number: ${env.BUILD_NUMBER}
+Build Date: \$(date)
+Git Tag: ${params.APPLICATION}-${params.VERSION}
+Docker Image: ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION}
+
+This release has been built and pushed to the registry.
+EOF
+                        
+                        echo "✓ Artifacts prepared"
+                    """
+                    
+                    // Archive the artifacts
+                    archiveArtifacts artifacts: 'artifacts/**/*', 
+                                     fingerprint: true,
+                                     allowEmptyArchive: false
+                    
+                    echo "✓ Artifacts archived successfully"
+                }
+            }
+        }
+        
         stage('Update Dev Environment') {
             when {
                 expression { params.DEPLOY_TO_DEV == true }
@@ -221,6 +272,17 @@ pipeline {
                 Image: ${env.DOCKER_REGISTRY}/${params.APPLICATION}:${params.VERSION}
                 Tag: ${params.APPLICATION}-${params.VERSION}
                 Deployed to Dev: ${params.DEPLOY_TO_DEV}
+                Build Number: ${env.BUILD_NUMBER}
+                Artifacts: Archived
+                ========================================
+                
+                📦 Artifacts Available:
+                - release-metadata.json
+                - Dockerfile
+                - RELEASE_NOTES.txt
+                
+                This build can be promoted to test/stage/prod environments
+                using the Promotion Orchestrator Job.
                 ========================================
                 """
             }
@@ -245,7 +307,7 @@ pipeline {
                     docker rmi ${env.DOCKER_REGISTRY}/${params.APPLICATION}:latest || true
                 """
             }
-            cleanWs()
+            cleanWs(deleteDirs: true, patterns: [[pattern: 'artifacts', type: 'EXCLUDE']])
         }
     }
 }
