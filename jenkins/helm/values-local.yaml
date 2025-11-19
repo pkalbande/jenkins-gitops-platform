@@ -16,6 +16,8 @@ jenkins:
   additionalPlugins:
     - release:2.12
     - promoted-builds:876.v99d29788b_36b_
+    - job-dsl:latest
+    - workflow-aggregator:latest
   
   resources:
     requests:
