@@ -339,7 +339,9 @@ pipeline {
                 echo "=========================================="
                 echo "📥 Checking out source code"
                 echo "=========================================="
-                checkout scm
+                git branch: 'master', 
+                    credentialsId: 'github-token', 
+                    url: 'https://github.com/pkalbande/jenkins-gitops-platform.git'
             }
         }
         
@@ -586,7 +588,9 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo "📥 Checking out source code"
-                checkout scm
+                git branch: 'master', 
+                    credentialsId: 'github-token', 
+                    url: 'https://github.com/pkalbande/jenkins-gitops-platform.git'
             }
         }
         
