@@ -57,6 +57,8 @@ spec:
               mountPath: /var/jenkins_home
             - name: jenkins-casc-config
               mountPath: /var/jenkins_home/casc_configs
+            - name: jenkins-init-scripts
+              mountPath: /var/jenkins_home/init.groovy.d
           resources:
             {{- toYaml .Values.jenkins.resources | nindent 12 }}
           livenessProbe:
@@ -82,3 +84,6 @@ spec:
         - name: jenkins-casc-config
           configMap:
             name: jenkins-casc-config
+        - name: jenkins-init-scripts
+          configMap:
+            name: jenkins-init-scripts
