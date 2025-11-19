@@ -25,23 +25,10 @@ data:
     // Create job from XML
     def xml = '''<?xml version='1.1' encoding='UTF-8'?>
     <project>
-      <description>Seed job that creates other Jenkins jobs from DSL scripts in Git</description>
+      <description>Seed job that creates other Jenkins jobs from inline DSL script</description>
       <keepDependencies>false</keepDependencies>
       <properties/>
-      <scm class="hudson.plugins.git.GitSCM">
-        <configVersion>2</configVersion>
-        <userRemoteConfigs>
-          <hudson.plugins.git.UserRemoteConfig>
-            <url>https://github.com/pkalbande/jenkins-gitops-platform.git</url>
-            <credentialsId>github-token</credentialsId>
-          </hudson.plugins.git.UserRemoteConfig>
-        </userRemoteConfigs>
-        <branches>
-          <hudson.plugins.git.BranchSpec>
-            <name>*/master</name>
-          </hudson.plugins.git.BranchSpec>
-        </branches>
-      </scm>
+      <scm class="hudson.scm.NullSCM"/>
       <canRoam>true</canRoam>
       <disabled>false</disabled>
       <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
@@ -49,16 +36,91 @@ data:
       <triggers/>
       <concurrentBuild>false</concurrentBuild>
       <builders>
-        <javaposse.jobdsl.plugin.ExecuteDslScripts>
-          <targets>jenkins/dsl/jobs.groovy</targets>
-          <usingScriptText>false</usingScriptText>
-          <sandbox>false</sandbox>
-          <removedJobAction>IGNORE</removedJobAction>
-          <removedViewAction>IGNORE</removedViewAction>
-          <removedConfigFilesAction>IGNORE</removedConfigFilesAction>
-          <lookupStrategy>JENKINS_ROOT</lookupStrategy>
-        </javaposse.jobdsl.plugin.ExecuteDslScripts>
-      </builders>
+    <javaposse.jobdsl.plugin.ExecuteDslScripts>
+      <scriptText><![CDATA[
+pipelineJob('release-build-job') {
+    description('🚀 Release Build Job - Build code, create versioned release, and archive artifacts using Release Plugin')
+    displayName('🚀 Release Build Job')
+    
+    properties {
+        buildDiscarder {
+            strategy {
+                logRotator {
+                    numToKeepStr('10')
+                    artifactNumToKeepStr('10')
+                }
+            }
+        }
+    }
+    
+    parameters {
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
+        stringParam('VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
+        booleanParam('DEPLOY_TO_DEV', true, 'Automatically deploy to dev environment after build')
+    }
+    
+    definition {
+        cpsScm {
+            scm {
+                git {
+                    remote {
+                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                        credentials('github-token')
+                    }
+                    branch('*/master')
+                }
+            }
+            scriptPath('jenkins/pipelines/release-build/Jenkinsfile')
+        }
+    }
+}
+
+pipelineJob('promotion-orchestrator-job') {
+    description('🎯 Promotion Orchestrator Job - Select and promote previous builds across environments (DEV → QA → STAGE → PROD)')
+    displayName('🎯 Promotion Orchestrator Job')
+    
+    properties {
+        buildDiscarder {
+            strategy {
+                logRotator {
+                    numToKeepStr('20')
+                }
+            }
+        }
+    }
+    
+    parameters {
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to promote')
+        stringParam('BUILD_NUMBER', '', 'Build number from release-build-job to promote')
+        stringParam('VERSION', '', 'Version to promote (e.g., 1.0.0)')
+        choiceParam('PROMOTION_LEVEL', ['Deploy-to-DEV', 'Deploy-to-QA', 'Deploy-to-STAGE', 'Deploy-to-PROD'], 'Select promotion level')
+        textParam('APPROVAL_NOTES', '', 'Approval notes and justification')
+    }
+    
+    definition {
+        cpsScm {
+            scm {
+                git {
+                    remote {
+                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                        credentials('github-token')
+                    }
+                    branch('*/master')
+                }
+            }
+            scriptPath('jenkins/pipelines/promotion-orchestrator/Jenkinsfile')
+        }
+    }
+}
+      ]]></scriptText>
+      <usingScriptText>true</usingScriptText>
+      <sandbox>false</sandbox>
+      <removedJobAction>IGNORE</removedJobAction>
+      <removedViewAction>IGNORE</removedViewAction>
+      <removedConfigFilesAction>IGNORE</removedConfigFilesAction>
+      <lookupStrategy>JENKINS_ROOT</lookupStrategy>
+    </javaposse.jobdsl.plugin.ExecuteDslScripts>
+  </builders>
       <publishers/>
       <buildWrappers/>
     </project>'''
