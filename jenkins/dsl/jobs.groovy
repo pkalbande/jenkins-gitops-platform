@@ -239,43 +239,96 @@ chmod +x deploy.sh
     }
 }
 
-pipelineJob('promotion-orchestrator-job') {
+freeStyleJob('promotion-orchestrator-job') {
     description('🎯 Promotion Orchestrator Job - Select and promote previous builds across environments (DEV → QA → STAGE → PROD)')
-    displayName('🎯 Promotion Orchestrator Job')
+    displayName('🎯 Promotion Orchestrator')
     
-    properties {
-        buildDiscarder {
-            strategy {
-                logRotator {
-                    daysToKeepStr('60')
-                    numToKeepStr('20')
-                    artifactDaysToKeepStr('60')
-                    artifactNumToKeepStr('20')
-                }
-            }
-        }
+    logRotator {
+        daysToKeep(60)
+        numToKeep(20)
+        artifactDaysToKeep(60)
+        artifactNumToKeep(20)
     }
     
     parameters {
-        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to promote')
-        stringParam('BUILD_NUMBER', '', 'Build number from release-build-job to promote')
-        stringParam('VERSION', '', 'Version to promote (e.g., 1.0.0)')
-        choiceParam('PROMOTION_LEVEL', ['Deploy-to-DEV', 'Deploy-to-QA', 'Deploy-to-STAGE', 'Deploy-to-PROD'], 'Select promotion level')
-        textParam('APPROVAL_NOTES', '', 'Approval notes and justification')
+        stringParam('BUILD_NUMBER', '', 'Build number from release-build-job to promote (e.g., 5)')
+        choiceParam('ENVIRONMENT', ['DEV', 'QA', 'STAGE', 'PROD'], 'Select environment to promote to')
+        textParam('APPROVAL_NOTES', '', 'Approval notes and justification for this promotion')
     }
     
-    definition {
-        cpsScm {
-            scm {
-                git {
-                    remote {
-                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
-                        credentials('github-token')
-                    }
-                    branch('*/master')
-                }
-            }
-            scriptPath('jenkins/pipelines/promotion-orchestrator/Jenkinsfile')
-        }
+    steps {
+        shell('''#!/bin/bash
+set -e
+
+echo "=========================================="
+echo "🎯 Manual Promotion Request"
+echo "=========================================="
+echo "Build Number: ${BUILD_NUMBER}"
+echo "Environment: ${ENVIRONMENT}"
+echo "Approval Notes: ${APPROVAL_NOTES}"
+echo "Requested by: ${BUILD_USER:-admin}"
+echo "=========================================="
+
+# Validate build number
+if [ -z "${BUILD_NUMBER}" ]; then
+    echo "❌ ERROR: BUILD_NUMBER is required"
+    exit 1
+fi
+
+# Get Jenkins credentials
+JENKINS_URL="${JENKINS_URL:-http://jenkins.jenkins.svc.cluster.local:8080}"
+JENKINS_USER="${JENKINS_USER:-admin}"
+JENKINS_TOKEN="${JENKINS_TOKEN:-admin123}"
+
+# Construct promotion URL based on environment
+PROMOTION_NAME="PROMOTE_TO_${ENVIRONMENT}"
+
+echo "Triggering promotion: ${PROMOTION_NAME} for build #${BUILD_NUMBER}..."
+
+# Trigger the promotion using Jenkins API
+PROMOTION_URL="${JENKINS_URL}/job/release-build-job/${BUILD_NUMBER}/promotion/${PROMOTION_NAME}/forcePromotion"
+
+echo "Promotion URL: ${PROMOTION_URL}"
+echo "Submitting promotion request..."
+
+# Use curl to trigger the promotion
+HTTP_CODE=$(curl -s -o /tmp/promotion_response.txt -w "%{http_code}" \\
+    -X POST \\
+    -u "${JENKINS_USER}:${JENKINS_TOKEN}" \\
+    "${PROMOTION_URL}")
+
+echo "HTTP Response Code: ${HTTP_CODE}"
+
+if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "201" ] || [ "${HTTP_CODE}" = "302" ]; then
+    echo "✅ Successfully triggered promotion to ${ENVIRONMENT}"
+    echo "=========================================="
+    echo "Promotion Details:"
+    echo "  • Source Build: release-build-job #${BUILD_NUMBER}"
+    echo "  • Target Environment: ${ENVIRONMENT}"
+    echo "  • Promotion Process: ${PROMOTION_NAME}"
+    echo "  • Status: Triggered"
+    echo "=========================================="
+else
+    echo "⚠️  Promotion request returned HTTP ${HTTP_CODE}"
+    echo "Response:"
+    cat /tmp/promotion_response.txt
+    echo ""
+    echo "Note: Check release-build-job #${BUILD_NUMBER} promotion status manually"
+fi
+
+# Log promotion request
+echo ""
+echo "📝 Promotion Log Entry:"
+echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Build: #${BUILD_NUMBER}"
+echo "Environment: ${ENVIRONMENT}"
+echo "Approver: ${BUILD_USER:-admin}"
+echo "Notes: ${APPROVAL_NOTES}"
+echo "=========================================="
+        ''')
+    }
+    
+    publishers {
+        mailer('', false, false)
     }
 }
