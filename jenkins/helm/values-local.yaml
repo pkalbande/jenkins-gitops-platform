@@ -88,6 +88,30 @@ jenkins:
       
       jobs:
         - script: >
+            freeStyleJob('seed-job') {
+              displayName('🌱 DSL Seed Job')
+              description('Seed job that creates other Jenkins jobs from DSL scripts in Git')
+              scm {
+                git {
+                  remote {
+                    url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                    credentials('github-token')
+                  }
+                  branch('*/master')
+                }
+              }
+              steps {
+                dsl {
+                  external('jenkins/dsl/jobs.groovy')
+                  removeAction('IGNORE')
+                  removeViewAction('IGNORE')
+                  ignoreExisting(false)
+                  lookupStrategy('JENKINS_ROOT')
+                }
+              }
+            }
+        
+        - script: >
             pipelineJob('release-build-job') {
               description('Release Build Job - Build code, create versioned release, and archive artifacts using Release Plugin')
               displayName('🚀 Release Build Job')
