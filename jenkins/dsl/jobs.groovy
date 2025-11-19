@@ -68,11 +68,6 @@ echo "=========================================="
 # Navigate to application directory
 cd apps/${APPLICATION}
 
-# Build Docker image with version tag
-echo "Building Docker image..."
-docker build -t ${APPLICATION}:${RELEASE_VERSION} .
-docker tag ${APPLICATION}:${RELEASE_VERSION} ${APPLICATION}:latest
-
 # Create release metadata
 echo "Creating release metadata..."
 cat > release-metadata.json << 'EOF'
@@ -142,13 +137,10 @@ echo "Application: ${APPLICATION}"
 echo "Version: ${RELEASE_VERSION}"
 echo "=========================================="
 
-# Simulate deployment to DEV
-echo "📦 Deploying ${APPLICATION}:${RELEASE_VERSION} to DEV environment..."
-echo "✅ Successfully deployed to DEV!"
-
-# Update deployment manifest (simulated)
-echo "Updating GitOps manifests for DEV..."
-echo "DEV deployment completed at $(date)"
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh DEV ${RELEASE_VERSION} ${PROMOTED_NUMBER}
                         ''')
                     }
                 }
@@ -175,10 +167,10 @@ echo "Application: ${APPLICATION}"
 echo "Version: ${RELEASE_VERSION}"
 echo "=========================================="
 
-echo "📦 Deploying ${APPLICATION}:${RELEASE_VERSION} to QA environment..."
-echo "✅ Successfully deployed to QA!"
-
-echo "QA deployment completed at $(date)"
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh QA ${RELEASE_VERSION} ${PROMOTED_NUMBER}
                         ''')
                     }
                 }
@@ -205,10 +197,10 @@ echo "Application: ${APPLICATION}"
 echo "Version: ${RELEASE_VERSION}"
 echo "=========================================="
 
-echo "📦 Deploying ${APPLICATION}:${RELEASE_VERSION} to STAGE environment..."
-echo "✅ Successfully deployed to STAGE!"
-
-echo "STAGE deployment completed at $(date)"
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh STAGE ${RELEASE_VERSION} ${PROMOTED_NUMBER}
                         ''')
                     }
                 }
@@ -235,11 +227,10 @@ echo "Application: ${APPLICATION}"
 echo "Version: ${RELEASE_VERSION}"
 echo "=========================================="
 
-echo "📦 Deploying ${APPLICATION}:${RELEASE_VERSION} to PROD environment..."
-echo "⚠️  PRODUCTION DEPLOYMENT IN PROGRESS..."
-echo "✅ Successfully deployed to PROD!"
-
-echo "PROD deployment completed at $(date)"
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh PROD ${RELEASE_VERSION} ${PROMOTED_NUMBER}
                         ''')
                     }
                 }
