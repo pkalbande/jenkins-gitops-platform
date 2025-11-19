@@ -21,11 +21,11 @@ jenkins:
   
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 750m
+      memory: 3Gi
     limits:
-      cpu: 2000m
-      memory: 2Gi
+      cpu: 2250m
+      memory: 4Gi
   
   service:
     type: NodePort
