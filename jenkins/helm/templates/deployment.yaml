@@ -32,11 +32,28 @@ spec:
           volumeMounts:
             - name: jenkins-home
               mountPath: /var/jenkins_home
+        - name: install-docker-cli
+          image: docker:24-cli
+          command:
+            - sh
+            - -c
+            - |
+              echo "Installing Docker CLI to Jenkins home..."
+              mkdir -p /var/jenkins_home/docker-cli
+              cp /usr/local/bin/docker /var/jenkins_home/docker-cli/
+              chmod +x /var/jenkins_home/docker-cli/docker
+              echo "Docker CLI installed successfully"
+          volumeMounts:
+            - name: jenkins-home
+              mountPath: /var/jenkins_home
       {{- end }}
       containers:
         - name: jenkins
           image: "{{ .Values.jenkins.image }}:{{ .Values.jenkins.tag }}"
           imagePullPolicy: {{ .Values.jenkins.imagePullPolicy }}
+          securityContext:
+            privileged: false
+            runAsUser: 1000
           ports:
             - name: http
               containerPort: 8080
@@ -49,6 +66,10 @@ spec:
               value: "{{ .Values.jenkins.javaOpts }}"
             - name: CASC_JENKINS_CONFIG
               value: /var/jenkins_home/casc_configs
+            - name: DOCKER_HOST
+              value: tcp://localhost:2375
+            - name: PATH
+              value: /var/jenkins_home/docker-cli:/usr/local/openjdk-17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           envFrom:
             - secretRef:
                 name: jenkins-secrets
@@ -77,6 +98,16 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+        - name: docker-daemon
+          image: docker:24-dind
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          volumeMounts:
+            - name: docker-storage
+              mountPath: /var/lib/docker
       volumes:
         - name: jenkins-home
           persistentVolumeClaim:
@@ -87,3 +118,5 @@ spec:
         - name: jenkins-init-scripts
           configMap:
             name: jenkins-init-scripts
+        - name: docker-storage
+          emptyDir: {}
