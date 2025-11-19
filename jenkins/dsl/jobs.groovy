@@ -75,17 +75,27 @@ docker tag ${APPLICATION}:${RELEASE_VERSION} ${APPLICATION}:latest
 
 # Create release metadata
 echo "Creating release metadata..."
-cat > release-metadata.json << EOF
+cat > release-metadata.json << 'EOF'
 {
-  "application": "${APPLICATION}",
-  "version": "${RELEASE_VERSION}",
-  "build_number": "${BUILD_NUMBER}",
-  "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "git_commit": "${GIT_COMMIT:-unknown}",
-  "git_branch": "${GIT_BRANCH:-master}",
-  "jenkins_url": "${BUILD_URL}"
+  "application": "APPLICATION_PLACEHOLDER",
+  "version": "VERSION_PLACEHOLDER",
+  "build_number": "BUILD_NUMBER_PLACEHOLDER",
+  "build_date": "BUILD_DATE_PLACEHOLDER",
+  "git_commit": "GIT_COMMIT_PLACEHOLDER",
+  "git_branch": "GIT_BRANCH_PLACEHOLDER",
+  "jenkins_url": "BUILD_URL_PLACEHOLDER"
 }
 EOF
+
+# Replace placeholders with actual values
+sed -i.bak "s|APPLICATION_PLACEHOLDER|${APPLICATION}|g" release-metadata.json
+sed -i.bak "s|VERSION_PLACEHOLDER|${RELEASE_VERSION}|g" release-metadata.json
+sed -i.bak "s|BUILD_NUMBER_PLACEHOLDER|${BUILD_NUMBER}|g" release-metadata.json
+sed -i.bak "s|BUILD_DATE_PLACEHOLDER|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" release-metadata.json
+sed -i.bak "s|GIT_COMMIT_PLACEHOLDER|${GIT_COMMIT:-unknown}|g" release-metadata.json
+sed -i.bak "s|GIT_BRANCH_PLACEHOLDER|${GIT_BRANCH:-master}|g" release-metadata.json
+sed -i.bak "s|BUILD_URL_PLACEHOLDER|${BUILD_URL}|g" release-metadata.json
+rm -f release-metadata.json.bak
 
 echo "=========================================="
 echo "✅ Build completed successfully!"
