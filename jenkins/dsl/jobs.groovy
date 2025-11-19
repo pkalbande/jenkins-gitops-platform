@@ -296,3 +296,339 @@ echo "=========================================="
         mailer('', false, false)
     }
 }
+
+// Pipeline Job 1: Release Pipeline with Manual Approvals
+pipelineJob('release-pipeline-job') {
+    description('🚀 Release Pipeline - Declarative pipeline with manual approval for TEST, STAGE, and PROD deployments')
+    displayName('🚀 Release Pipeline')
+    
+    logRotator {
+        daysToKeep(30)
+        numToKeep(10)
+        artifactDaysToKeep(30)
+        artifactNumToKeep(10)
+    }
+    
+    parameters {
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
+        stringParam('RELEASE_VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
+        booleanParam('SKIP_TESTS', false, 'Skip test execution')
+    }
+    
+    definition {
+        cps {
+            script('''
+pipeline {
+    agent any
+    
+    parameters {
+        choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to build')
+        string(name: 'RELEASE_VERSION', defaultValue: '1.0.0', description: 'Version number for the release')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip test execution')
+    }
+    
+    environment {
+        BUILD_DATE = sh(script: 'date -u +%Y-%m-%dT%H:%M:%SZ', returnStdout: true).trim()
+        GIT_COMMIT_HASH = sh(script: 'git rev-parse HEAD || echo "unknown"', returnStdout: true).trim()
+        GIT_BRANCH_NAME = sh(script: 'git rev-parse --abbrev-ref HEAD || echo "master"', returnStdout: true).trim()
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "=========================================="
+                echo "📥 Checking out source code"
+                echo "=========================================="
+                checkout scm
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "🚀 Building Release Version: ${params.RELEASE_VERSION}"
+                    echo "Application: ${params.APPLICATION}"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            echo "Creating release metadata..."
+                            cat > release-metadata.json << EOF
+{
+  "application": "${params.APPLICATION}",
+  "version": "${params.RELEASE_VERSION}",
+  "build_number": "${env.BUILD_NUMBER}",
+  "build_date": "${env.BUILD_DATE}",
+  "git_commit": "${env.GIT_COMMIT_HASH}",
+  "git_branch": "${env.GIT_BRANCH_NAME}",
+  "jenkins_url": "${env.BUILD_URL}"
+}
+EOF
+                            
+                            echo "=========================================="
+                            echo "✅ Build completed successfully!"
+                            echo "=========================================="
+                            cat release-metadata.json
+                        """
+                        
+                        archiveArtifacts artifacts: 'release-metadata.json,Dockerfile', fingerprint: true
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to DEV') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "🎯 Deploying to DEV Environment"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            chmod +x deploy.sh
+                            ./deploy.sh DEV ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to TEST') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "⏸️  TEST Deployment - Approval Required"
+                    echo "=========================================="
+                    
+                    timeout(time: 24, unit: 'HOURS') {
+                        input message: 'Deploy to TEST environment?', 
+                              ok: 'Deploy to TEST',
+                              submitter: 'admin',
+                              submitterParameter: 'APPROVER'
+                    }
+                    
+                    echo "=========================================="
+                    echo "🎯 Deploying to TEST Environment"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            chmod +x deploy.sh
+                            ./deploy.sh TEST ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to STAGE') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "⏸️  STAGE Deployment - Approval Required"
+                    echo "=========================================="
+                    
+                    timeout(time: 24, unit: 'HOURS') {
+                        input message: 'Deploy to STAGE environment?', 
+                              ok: 'Deploy to STAGE',
+                              submitter: 'admin',
+                              submitterParameter: 'APPROVER'
+                    }
+                    
+                    echo "=========================================="
+                    echo "🎯 Deploying to STAGE Environment"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            chmod +x deploy.sh
+                            ./deploy.sh STAGE ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to PROD') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "⏸️  PRODUCTION Deployment - Approval Required"
+                    echo "=========================================="
+                    
+                    timeout(time: 72, unit: 'HOURS') {
+                        input message: 'Deploy to PRODUCTION environment?', 
+                              ok: 'Deploy to PROD',
+                              submitter: 'admin',
+                              submitterParameter: 'APPROVER'
+                    }
+                    
+                    echo "=========================================="
+                    echo "🎯 Deploying to PRODUCTION Environment"
+                    echo "⚠️  PRODUCTION DEPLOYMENT IN PROGRESS"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            chmod +x deploy.sh
+                            ./deploy.sh PROD ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "=========================================="
+            echo "✅ Pipeline completed successfully!"
+            echo "Release ${params.RELEASE_VERSION} deployed through all environments"
+            echo "=========================================="
+        }
+        failure {
+            echo "=========================================="
+            echo "❌ Pipeline failed!"
+            echo "=========================================="
+        }
+        aborted {
+            echo "=========================================="
+            echo "⚠️  Pipeline aborted by user"
+            echo "=========================================="
+        }
+    }
+}
+            '''.stripIndent())
+            sandbox()
+        }
+    }
+}
+
+// Pipeline Job 2: Selective Promotion Pipeline
+pipelineJob('selective-promotion-pipeline') {
+    description('🎯 Selective Promotion Pipeline - Manually select environment to deploy a specific build')
+    displayName('🎯 Selective Promotion Pipeline')
+    
+    logRotator {
+        daysToKeep(60)
+        numToKeep(20)
+        artifactDaysToKeep(60)
+        artifactNumToKeep(20)
+    }
+    
+    parameters {
+        stringParam('BUILD_NUMBER', '', 'Build number to promote (from release-pipeline-job)')
+        choiceParam('TARGET_ENVIRONMENT', ['TEST', 'STAGE', 'PROD'], 'Select target environment')
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application')
+        stringParam('VERSION', '1.0.0', 'Version to promote')
+        textParam('APPROVAL_NOTES', '', 'Approval notes and justification')
+    }
+    
+    definition {
+        cps {
+            script('''
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'BUILD_NUMBER', defaultValue: '', description: 'Build number to promote')
+        choice(name: 'TARGET_ENVIRONMENT', choices: ['TEST', 'STAGE', 'PROD'], description: 'Target environment')
+        choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Application')
+        string(name: 'VERSION', defaultValue: '1.0.0', description: 'Version to promote')
+        text(name: 'APPROVAL_NOTES', defaultValue: '', description: 'Approval notes')
+    }
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "🔍 Validating Promotion Request"
+                    echo "=========================================="
+                    echo "Build Number: ${params.BUILD_NUMBER}"
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Version: ${params.VERSION}"
+                    echo "Target Environment: ${params.TARGET_ENVIRONMENT}"
+                    echo "Approval Notes: ${params.APPROVAL_NOTES}"
+                    echo "=========================================="
+                    
+                    if (!params.BUILD_NUMBER) {
+                        error("BUILD_NUMBER is required!")
+                    }
+                }
+            }
+        }
+        
+        stage('Approval') {
+            when {
+                expression { params.TARGET_ENVIRONMENT in ['STAGE', 'PROD'] }
+            }
+            steps {
+                script {
+                    def approvalMessage = "Promote build #${params.BUILD_NUMBER} to ${params.TARGET_ENVIRONMENT}?"
+                    
+                    echo "=========================================="
+                    echo "⏸️  Approval Required for ${params.TARGET_ENVIRONMENT}"
+                    echo "=========================================="
+                    
+                    timeout(time: 48, unit: 'HOURS') {
+                        input message: approvalMessage,
+                              ok: "Approve ${params.TARGET_ENVIRONMENT} Promotion",
+                              submitter: 'admin',
+                              submitterParameter: 'APPROVER'
+                    }
+                }
+            }
+        }
+        
+        stage('Checkout') {
+            steps {
+                echo "📥 Checking out source code"
+                checkout scm
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "🎯 Deploying to ${params.TARGET_ENVIRONMENT}"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            chmod +x deploy.sh
+                            ./deploy.sh ${params.TARGET_ENVIRONMENT} ${params.VERSION} ${params.BUILD_NUMBER}
+                        """
+                    }
+                    
+                    echo "=========================================="
+                    echo "📝 Promotion Log Entry:"
+                    echo "Timestamp: \\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                    echo "Build: #${params.BUILD_NUMBER}"
+                    echo "Environment: ${params.TARGET_ENVIRONMENT}"
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Version: ${params.VERSION}"
+                    echo "Notes: ${params.APPROVAL_NOTES}"
+                    echo "=========================================="
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "✅ Successfully promoted build #${params.BUILD_NUMBER} to ${params.TARGET_ENVIRONMENT}"
+        }
+        failure {
+            echo "❌ Failed to promote build #${params.BUILD_NUMBER} to ${params.TARGET_ENVIRONMENT}"
+        }
+    }
+}
+            '''.stripIndent())
+            sandbox()
+        }
+    }
+}
