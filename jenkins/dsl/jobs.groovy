@@ -27,6 +27,101 @@ freeStyleJob('release-build-job') {
         }
     }
     
+    properties {
+        promotions {
+            promotion {
+                name('PROMOTE_TO_DEV')
+                icon('star-gold')
+                conditions {
+                    selfPromotion(false)
+                }
+                actions {
+                    shell('''#!/bin/bash
+echo "=========================================="
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to DEV"
+echo "Application: ${APPLICATION}"
+echo "Version: ${RELEASE_VERSION}"
+echo "=========================================="
+
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh DEV ${RELEASE_VERSION} ${PROMOTED_NUMBER}
+                    ''')
+                }
+            }
+            
+            promotion {
+                name('PROMOTE_TO_QA')
+                icon('star-gold')
+                conditions {
+                    upstream('PROMOTE_TO_DEV')
+                    manual('')
+                }
+                actions {
+                    shell('''#!/bin/bash
+echo "=========================================="
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to QA"
+echo "Application: ${APPLICATION}"
+echo "Version: ${RELEASE_VERSION}"
+echo "=========================================="
+
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh QA ${RELEASE_VERSION} ${PROMOTED_NUMBER}
+                    ''')
+                }
+            }
+            
+            promotion {
+                name('PROMOTE_TO_STAGE')
+                icon('star-gold')
+                conditions {
+                    upstream('PROMOTE_TO_QA')
+                    manual('')
+                }
+                actions {
+                    shell('''#!/bin/bash
+echo "=========================================="
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to STAGE"
+echo "Application: ${APPLICATION}"
+echo "Version: ${RELEASE_VERSION}"
+echo "=========================================="
+
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh STAGE ${RELEASE_VERSION} ${PROMOTED_NUMBER}
+                    ''')
+                }
+            }
+            
+            promotion {
+                name('PROMOTE_TO_PROD')
+                icon('star-gold')
+                conditions {
+                    upstream('PROMOTE_TO_STAGE')
+                    manual('')
+                }
+                actions {
+                    shell('''#!/bin/bash
+echo "=========================================="
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to PROD"
+echo "Application: ${APPLICATION}"
+echo "Version: ${RELEASE_VERSION}"
+echo "=========================================="
+
+# Run deployment script
+cd apps/${APPLICATION}
+chmod +x deploy.sh
+./deploy.sh PROD ${RELEASE_VERSION} ${PROMOTED_NUMBER}
+                    ''')
+                }
+            }
+        }
+    }
+    
     wrappers {
         release {
             preBuildSteps {
@@ -104,137 +199,6 @@ cat release-metadata.json
             pattern('apps/*/release-metadata.json, apps/*/Dockerfile')
             fingerprint(true)
             allowEmpty(false)
-        }
-        
-        // Configure Promoted Builds Plugin with 4 promotion levels
-        configure { project ->
-            project / publishers << 'hudson.plugins.promoted__builds.JobPropertyImpl' {
-                activeProcessNames {
-                    string('PROMOTE_TO_DEV')
-                    string('PROMOTE_TO_QA')
-                    string('PROMOTE_TO_STAGE')
-                    string('PROMOTE_TO_PROD')
-                }
-            }
-            
-            def promotions = project / 'properties' / 'hudson.plugins.promoted__builds.JobPropertyImpl'
-            
-            // Promotion 1: Deploy to DEV
-            promotions << 'hudson.plugins.promoted__builds.PromotionProcess' {
-                name('PROMOTE_TO_DEV')
-                icon('star-gold')
-                conditions {
-                    'hudson.plugins.promoted__builds.conditions.SelfPromotionCondition' {
-                        evenIfUnstable(false)
-                    }
-                }
-                buildSteps {
-                    'hudson.tasks.Shell' {
-                        command('''#!/bin/bash
-echo "=========================================="
-echo "🎯 Promoting Build #${PROMOTED_NUMBER} to DEV"
-echo "Application: ${APPLICATION}"
-echo "Version: ${RELEASE_VERSION}"
-echo "=========================================="
-
-# Run deployment script
-cd apps/${APPLICATION}
-chmod +x deploy.sh
-./deploy.sh DEV ${RELEASE_VERSION} ${PROMOTED_NUMBER}
-                        ''')
-                    }
-                }
-            }
-            
-            // Promotion 2: Deploy to QA
-            promotions << 'hudson.plugins.promoted__builds.PromotionProcess' {
-                name('PROMOTE_TO_QA')
-                icon('star-gold')
-                conditions {
-                    'hudson.plugins.promoted__builds.conditions.UpstreamPromotionCondition' {
-                        promotionNames('PROMOTE_TO_DEV')
-                    }
-                    'hudson.plugins.promoted__builds.conditions.ManualCondition' {
-                        users('')
-                    }
-                }
-                buildSteps {
-                    'hudson.tasks.Shell' {
-                        command('''#!/bin/bash
-echo "=========================================="
-echo "🎯 Promoting Build #${PROMOTED_NUMBER} to QA"
-echo "Application: ${APPLICATION}"
-echo "Version: ${RELEASE_VERSION}"
-echo "=========================================="
-
-# Run deployment script
-cd apps/${APPLICATION}
-chmod +x deploy.sh
-./deploy.sh QA ${RELEASE_VERSION} ${PROMOTED_NUMBER}
-                        ''')
-                    }
-                }
-            }
-            
-            // Promotion 3: Deploy to STAGE
-            promotions << 'hudson.plugins.promoted__builds.PromotionProcess' {
-                name('PROMOTE_TO_STAGE')
-                icon('star-gold')
-                conditions {
-                    'hudson.plugins.promoted__builds.conditions.UpstreamPromotionCondition' {
-                        promotionNames('PROMOTE_TO_QA')
-                    }
-                    'hudson.plugins.promoted__builds.conditions.ManualCondition' {
-                        users('')
-                    }
-                }
-                buildSteps {
-                    'hudson.tasks.Shell' {
-                        command('''#!/bin/bash
-echo "=========================================="
-echo "🎯 Promoting Build #${PROMOTED_NUMBER} to STAGE"
-echo "Application: ${APPLICATION}"
-echo "Version: ${RELEASE_VERSION}"
-echo "=========================================="
-
-# Run deployment script
-cd apps/${APPLICATION}
-chmod +x deploy.sh
-./deploy.sh STAGE ${RELEASE_VERSION} ${PROMOTED_NUMBER}
-                        ''')
-                    }
-                }
-            }
-            
-            // Promotion 4: Deploy to PROD
-            promotions << 'hudson.plugins.promoted__builds.PromotionProcess' {
-                name('PROMOTE_TO_PROD')
-                icon('star-gold')
-                conditions {
-                    'hudson.plugins.promoted__builds.conditions.UpstreamPromotionCondition' {
-                        promotionNames('PROMOTE_TO_STAGE')
-                    }
-                    'hudson.plugins.promoted__builds.conditions.ManualCondition' {
-                        users('')
-                    }
-                }
-                buildSteps {
-                    'hudson.tasks.Shell' {
-                        command('''#!/bin/bash
-echo "=========================================="
-echo "🎯 Promoting Build #${PROMOTED_NUMBER} to PROD"
-echo "Application: ${APPLICATION}"
-echo "Version: ${RELEASE_VERSION}"
-echo "=========================================="
-
-# Run deployment script
-cd apps/${APPLICATION}
-chmod +x deploy.sh
-./deploy.sh PROD ${RELEASE_VERSION} ${PROMOTED_NUMBER}
-                        ''')
-                    }
-                }
-            }
         }
     }
 }
