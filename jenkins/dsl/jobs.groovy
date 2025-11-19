@@ -8,7 +8,9 @@ pipelineJob('release-build-job') {
         buildDiscarder {
             strategy {
                 logRotator {
+                    daysToKeepStr('30')
                     numToKeepStr('10')
+                    artifactDaysToKeepStr('30')
                     artifactNumToKeepStr('10')
                 }
             }
@@ -45,7 +47,10 @@ pipelineJob('promotion-orchestrator-job') {
         buildDiscarder {
             strategy {
                 logRotator {
+                    daysToKeepStr('60')
                     numToKeepStr('20')
+                    artifactDaysToKeepStr('60')
+                    artifactNumToKeepStr('20')
                 }
             }
         }
