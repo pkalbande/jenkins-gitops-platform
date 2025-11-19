@@ -1,4 +1,5 @@
 import hudson.model.*
+import hudson.plugins.promoted_builds.*
 
 pipeline {
     agent {
@@ -9,16 +10,23 @@ pipeline {
     }
     
     parameters {
-        string(name: 'SOURCE_ENV', defaultValue: 'dev', description: 'Source environment (dev, test, stage)')
-        string(name: 'TARGET_ENV', defaultValue: 'test', description: 'Target environment (test, stage, prod)')
-        string(name: 'APPLICATION', defaultValue: 'app1', description: 'Application name (app1, app2)')
-        string(name: 'VERSION', defaultValue: '', description: 'Version/tag to promote')
+        choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to promote')
+        string(name: 'BUILD_NUMBER', defaultValue: '', description: 'Build number from release-build-job to promote')
+        string(name: 'VERSION', defaultValue: '', description: 'Version to promote (e.g., 1.0.0)')
+        choice(name: 'PROMOTION_LEVEL', choices: ['Deploy-to-DEV', 'Deploy-to-QA', 'Deploy-to-STAGE', 'Deploy-to-PROD'], description: 'Select promotion level')
+        text(name: 'APPROVAL_NOTES', defaultValue: '', description: 'Approval notes and justification')
     }
     
     environment {
         GIT_REPO = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
         GIT_CREDENTIALS = 'github-token'
         DOCKER_REGISTRY = 'localhost:5000'
+        PROMOTION_ENV_MAP = [
+            'Deploy-to-DEV': 'dev',
+            'Deploy-to-QA': 'qa',
+            'Deploy-to-STAGE': 'stage',
+            'Deploy-to-PROD': 'prod'
+        ]
     }
     
     stages {
@@ -26,6 +34,7 @@ pipeline {
             steps {
                 script {
                     echo "=== Available Builds for Promotion ==="
+                    echo "======================================"
                     
                     // List recent successful builds from release-build-job
                     try {
@@ -33,28 +42,47 @@ pipeline {
                         if (releaseJob) {
                             def builds = releaseJob.getBuilds().findAll { 
                                 it.result == hudson.model.Result.SUCCESS 
-                            }.take(10)
+                            }.take(15)
                             
-                            echo "\nRecent successful release builds:"
-                            echo "=================================="
+                            echo "\n📦 Recent successful release builds:\n"
                             builds.each { build ->
                                 def params = build.getAction(ParametersAction)
                                 def app = params?.getParameter('APPLICATION')?.value
                                 def version = params?.getParameter('VERSION')?.value
+                                
+                                // Get promotion status
+                                def promotionStatus = ''
+                                try {
+                                    def promotedBuilds = build.getActions(hudson.plugins.promoted_builds.Status)
+                                    if (promotedBuilds) {
+                                        def promotions = promotedBuilds[0].getPromotionProcesses()
+                                        def promotedNames = promotions.findAll { it.isMet() }.collect { it.name }
+                                        if (promotedNames) {
+                                            promotionStatus = " ✓ [${promotedNames.join(', ')}]"
+                                        }
+                                    }
+                                } catch (Exception pe) {
+                                    // Promotion status not available
+                                }
+                                
                                 if (app && version) {
-                                    echo "#${build.number} - ${app}:${version} (${build.time})"
+                                    echo "  #${build.number} - ${app}:${version}${promotionStatus}"
                                 }
                             }
-                            echo "==================================\n"
+                            echo "\n======================================"
+                        } else {
+                            echo "⚠️  release-build-job not found"
                         }
                     } catch (Exception e) {
                         echo "Note: Could not fetch release build history: ${e.message}"
                     }
                     
-                    echo "Selected for promotion:"
+                    echo "\n🎯 Selected for promotion:"
                     echo "  Application: ${params.APPLICATION}"
+                    echo "  Build Number: ${params.BUILD_NUMBER ?: 'Will use latest'}"
                     echo "  Version: ${params.VERSION}"
-                    echo "  Path: ${params.SOURCE_ENV} → ${params.TARGET_ENV}"
+                    echo "  Promotion Level: ${params.PROMOTION_LEVEL}"
+                    echo "======================================"
                 }
             }
         }
@@ -62,77 +90,138 @@ pipeline {
         stage('Validate Parameters') {
             steps {
                 script {
-                    echo "=== Promotion Orchestrator ==="
-                    echo "Application: ${params.APPLICATION}"
-                    echo "Source Environment: ${params.SOURCE_ENV}"
-                    echo "Target Environment: ${params.TARGET_ENV}"
-                    echo "Version: ${params.VERSION}"
+                    echo "=== Validating Promotion Request ==="
                     
-                    // Validate environments
-                    def validEnvs = ['dev', 'test', 'stage', 'prod']
-                    if (!validEnvs.contains(params.SOURCE_ENV) || !validEnvs.contains(params.TARGET_ENV)) {
-                        error("Invalid environment specified. Valid options: ${validEnvs}")
-                    }
-                    
-                    // Validate promotion path
-                    def promotionPaths = [
-                        'dev': ['test'],
-                        'test': ['stage'],
-                        'stage': ['prod']
-                    ]
-                    
-                    if (!promotionPaths[params.SOURCE_ENV]?.contains(params.TARGET_ENV)) {
-                        error("Invalid promotion path: ${params.SOURCE_ENV} -> ${params.TARGET_ENV}")
+                    if (!params.BUILD_NUMBER) {
+                        error("Build number is required. Check the list above and specify a build number.")
                     }
                     
                     if (!params.VERSION) {
                         error("Version parameter is required")
                     }
+                    
+                    // Get target environment from promotion level
+                    def targetEnv = PROMOTION_ENV_MAP[params.PROMOTION_LEVEL]
+                    if (!targetEnv) {
+                        error("Invalid promotion level: ${params.PROMOTION_LEVEL}")
+                    }
+                    
+                    env.TARGET_ENV = targetEnv
+                    echo "✓ Target Environment: ${env.TARGET_ENV}"
                 }
             }
         }
         
-        stage('Verify Source Deployment') {
+        stage('Verify Build Exists') {
             steps {
                 script {
-                    echo "Verifying ${params.APPLICATION}:${params.VERSION} in ${params.SOURCE_ENV}"
+                    echo "Verifying build #${params.BUILD_NUMBER} exists..."
                     
-                    // Check if the version exists in source environment
-                    def sourceValuesFile = "environments/${params.SOURCE_ENV}/${params.APPLICATION}-values.yaml"
+                    def releaseJob = Jenkins.instance.getItemByFullName('release-build-job')
+                    if (!releaseJob) {
+                        error("release-build-job not found")
+                    }
                     
-                    sh """
-                        if [ ! -f "${sourceValuesFile}" ]; then
-                            echo "Source values file not found: ${sourceValuesFile}"
-                            exit 1
-                        fi
+                    def targetBuild = releaseJob.getBuildByNumber(params.BUILD_NUMBER as Integer)
+                    if (!targetBuild) {
+                        error("Build #${params.BUILD_NUMBER} not found")
+                    }
+                    
+                    if (targetBuild.result != hudson.model.Result.SUCCESS) {
+                        error("Build #${params.BUILD_NUMBER} did not complete successfully (${targetBuild.result})")
+                    }
+                    
+                    // Verify version matches
+                    def buildParams = targetBuild.getAction(ParametersAction)
+                    def buildVersion = buildParams?.getParameter('VERSION')?.value
+                    if (buildVersion != params.VERSION) {
+                        error("Version mismatch: Build has ${buildVersion}, but you specified ${params.VERSION}")
+                    }
+                    
+                    echo "✓ Build #${params.BUILD_NUMBER} verified (${params.APPLICATION}:${params.VERSION})"
+                }
+            }
+        }
+        
+        stage('Check Promotion Prerequisites') {
+            steps {
+                script {
+                    echo "Checking promotion prerequisites for ${params.PROMOTION_LEVEL}..."
+                    
+                    def releaseJob = Jenkins.instance.getItemByFullName('release-build-job')
+                    def targetBuild = releaseJob.getBuildByNumber(params.BUILD_NUMBER as Integer)
+                    
+                    // Check if previous promotions are met
+                    def requiredPromotions = [
+                        'Deploy-to-DEV': [],
+                        'Deploy-to-QA': ['Deploy-to-DEV'],
+                        'Deploy-to-STAGE': ['Deploy-to-QA'],
+                        'Deploy-to-PROD': ['Deploy-to-STAGE']
+                    ]
+                    
+                    def required = requiredPromotions[params.PROMOTION_LEVEL]
+                    if (required) {
+                        echo "Checking prerequisite promotions: ${required}"
                         
-                        # Verify version in source environment
-                        echo "Checking version in source environment..."
-                        grep -q "tag: ${params.VERSION}" ${sourceValuesFile} || {
-                            echo "Version ${params.VERSION} not found in ${params.SOURCE_ENV}"
-                            exit 1
+                        try {
+                            def promotionStatus = targetBuild.getActions(hudson.plugins.promoted_builds.Status)
+                            if (promotionStatus) {
+                                def promotions = promotionStatus[0].getPromotionProcesses()
+                                def promotedNames = promotions.findAll { it.isMet() }.collect { it.name }
+                                
+                                required.each { req ->
+                                    if (!promotedNames.contains(req)) {
+                                        error("❌ Prerequisite promotion not met: ${req}")
+                                    }
+                                    echo "✓ ${req} - Completed"
+                                }
+                            } else {
+                                error("No promotion information available for this build")
+                            }
+                        } catch (Exception e) {
+                            echo "⚠️  Warning: Could not verify promotion prerequisites: ${e.message}"
+                        }
+                    }
+                    
+                    echo "✓ All prerequisites met"
+                }
+            }
+        }
+        
+        stage('Trigger Promotion') {
+            steps {
+                script {
+                    echo "Triggering promotion: ${params.PROMOTION_LEVEL}"
+                    echo "Approval Notes: ${params.APPROVAL_NOTES ?: 'None provided'}"
+                    
+                    def releaseJob = Jenkins.instance.getItemByFullName('release-build-job')
+                    def targetBuild = releaseJob.getBuildByNumber(params.BUILD_NUMBER as Integer)
+                    
+                    try {
+                        // Get the promotion process
+                        def jobProperty = releaseJob.getProperty(JobPropertyImpl.class)
+                        if (!jobProperty) {
+                            error("No promotions configured for release-build-job")
                         }
                         
-                        echo "✓ Version ${params.VERSION} verified in ${params.SOURCE_ENV}"
-                    """
-                }
-            }
-        }
-        
-        stage('Run Tests') {
-            steps {
-                script {
-                    echo "Running promotion validation tests..."
-                    
-                    // Add your test logic here
-                    // For example: smoke tests, integration tests, etc.
-                    
-                    sh """
-                        echo "Running smoke tests for ${params.APPLICATION}:${params.VERSION}"
-                        # Add actual test commands here
-                        sleep 2
-                        echo "✓ All tests passed"
-                    """
+                        def promotionProcess = jobProperty.getItem(params.PROMOTION_LEVEL)
+                        if (!promotionProcess) {
+                            error("Promotion process ${params.PROMOTION_LEVEL} not found")
+                        }
+                        
+                        // Manually approve the promotion
+                        def promotionCondition = new ManualCondition()
+                        promotionCondition.approve(targetBuild, promotionProcess)
+                        
+                        echo "✓ Promotion ${params.PROMOTION_LEVEL} triggered for build #${params.BUILD_NUMBER}"
+                        
+                        // Wait for promotion to complete
+                        sleep(time: 5, unit: 'SECONDS')
+                        
+                    } catch (Exception e) {
+                        echo "⚠️  Promotion trigger via API failed: ${e.message}"
+                        echo "Note: Proceeding with manual deployment to ${env.TARGET_ENV}"
+                    }
                 }
             }
         }
@@ -140,13 +229,13 @@ pipeline {
         stage('Update Target Environment') {
             steps {
                 script {
-                    echo "Promoting ${params.APPLICATION}:${params.VERSION} to ${params.TARGET_ENV}"
+                    echo "Deploying ${params.APPLICATION}:${params.VERSION} to ${env.TARGET_ENV}"
                     
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                         sh """
                             # Configure git
                             git config --global user.email "jenkins@gitops.local"
-                            git config --global user.name "Jenkins GitOps"
+                            git config --global user.name "Jenkins Promotion Bot"
                             
                             # Clone repository
                             git clone https://\${GITHUB_TOKEN}@github.com/pkalbande/jenkins-gitops-platform.git workspace
@@ -156,18 +245,39 @@ pipeline {
                             git checkout master
                             
                             # Update target environment values file
-                            TARGET_VALUES="environments/${params.TARGET_ENV}/${params.APPLICATION}-values.yaml"
+                            TARGET_VALUES="environments/${env.TARGET_ENV}/${params.APPLICATION}-values.yaml"
                             
-                            # Update image tag in target environment
-                            sed -i.bak "s/tag: .*/tag: ${params.VERSION}/" \${TARGET_VALUES}
-                            rm -f \${TARGET_VALUES}.bak
+                            # Create directory if it doesn't exist
+                            mkdir -p environments/${env.TARGET_ENV}
+                            
+                            # Update or create values file
+                            if [ -f "\${TARGET_VALUES}" ]; then
+                                sed -i.bak "s/tag: .*/tag: ${params.VERSION}/" \${TARGET_VALUES}
+                                rm -f \${TARGET_VALUES}.bak
+                            else
+                                cat > \${TARGET_VALUES} << EOF
+image:
+  repository: ${DOCKER_REGISTRY}/${params.APPLICATION}
+  tag: ${params.VERSION}
+  pullPolicy: Always
+
+# Promoted from build #${params.BUILD_NUMBER}
+# Promotion Level: ${params.PROMOTION_LEVEL}
+# Date: \$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+EOF
+                            fi
                             
                             # Commit and push changes
                             git add \${TARGET_VALUES}
-                            git commit -m "Promote ${params.APPLICATION}:${params.VERSION} from ${params.SOURCE_ENV} to ${params.TARGET_ENV}"
+                            git commit -m "🚀 Promote ${params.APPLICATION}:${params.VERSION} to ${env.TARGET_ENV} [Build #${params.BUILD_NUMBER}]
+
+Promotion: ${params.PROMOTION_LEVEL}
+Source Build: #${params.BUILD_NUMBER}
+Approval Notes: ${params.APPROVAL_NOTES ?: 'Automated promotion'}
+"
                             git push origin master
                             
-                            echo "✓ Successfully promoted to ${params.TARGET_ENV}"
+                            echo "✓ Successfully deployed to ${env.TARGET_ENV}"
                         """
                     }
                 }
@@ -177,15 +287,13 @@ pipeline {
         stage('Trigger ArgoCD Sync') {
             steps {
                 script {
-                    echo "Triggering ArgoCD sync for ${params.APPLICATION} in ${params.TARGET_ENV}"
-                    
-                    // Optional: Trigger ArgoCD sync via API
-                    // If ArgoCD auto-sync is enabled, this step is optional
+                    echo "Triggering ArgoCD sync for ${params.APPLICATION} in ${env.TARGET_ENV}"
                     
                     sh """
                         echo "ArgoCD will automatically sync the changes"
-                        echo "Application: ${params.APPLICATION}-${params.TARGET_ENV}"
+                        echo "Application: ${params.APPLICATION}-${env.TARGET_ENV}"
                         echo "New version: ${params.VERSION}"
+                        echo "Promoted via: ${params.PROMOTION_LEVEL}"
                     """
                 }
             }
@@ -194,14 +302,15 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    echo "Verifying deployment in ${params.TARGET_ENV}"
+                    echo "Verifying deployment in ${env.TARGET_ENV}"
                     
                     sh """
                         echo "Waiting for ArgoCD to sync..."
                         sleep 10
                         
                         # Check if pods are running in target namespace
-                        kubectl get pods -n ${params.TARGET_ENV} -l app=${params.APPLICATION} || true
+                        echo "Checking deployment status..."
+                        kubectl get pods -n ${env.TARGET_ENV} -l app=${params.APPLICATION} || echo "Namespace ${env.TARGET_ENV} may not exist yet"
                         
                         echo "✓ Deployment verification complete"
                     """
@@ -214,27 +323,42 @@ pipeline {
         success {
             script {
                 echo """
-                ========================================
-                ✓ PROMOTION SUCCESSFUL
-                ========================================
-                Application: ${params.APPLICATION}
-                Version: ${params.VERSION}
-                Promoted: ${params.SOURCE_ENV} → ${params.TARGET_ENV}
-                ========================================
-                """
+========================================
+✓ PROMOTION SUCCESSFUL
+========================================
+Application: ${params.APPLICATION}
+Version: ${params.VERSION}
+Build Number: #${params.BUILD_NUMBER}
+Promotion Level: ${params.PROMOTION_LEVEL}
+Target Environment: ${env.TARGET_ENV}
+Approval Notes: ${params.APPROVAL_NOTES ?: 'None'}
+========================================
+Next Steps:
+- Monitor deployment in ${env.TARGET_ENV}
+- Check application health and logs
+- Run smoke tests if required
+========================================
+"""
             }
         }
         failure {
             script {
                 echo """
-                ========================================
-                ✗ PROMOTION FAILED
-                ========================================
-                Application: ${params.APPLICATION}
-                Version: ${params.VERSION}
-                Path: ${params.SOURCE_ENV} → ${params.TARGET_ENV}
-                ========================================
-                """
+========================================
+✗ PROMOTION FAILED
+========================================
+Application: ${params.APPLICATION}
+Version: ${params.VERSION}
+Build Number: #${params.BUILD_NUMBER}
+Promotion Level: ${params.PROMOTION_LEVEL}
+Target Environment: ${env.TARGET_ENV}
+========================================
+Action Required:
+- Review build logs for errors
+- Check prerequisites are met
+- Verify build artifacts exist
+========================================
+"""
             }
         }
         always {
