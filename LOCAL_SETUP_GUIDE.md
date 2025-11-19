@@ -457,6 +457,140 @@ echo "======================================"
 # For Kind, Jenkins is accessible at: http://localhost:30000
 ```
 
+### Step 13a: Configure Jenkins Jobs with Release & Promotion Plugins
+
+The Jenkins instance already has two pre-configured jobs via JCasC:
+
+**Job 1: Release Build Job** - Builds code, creates versioned releases, and archives artifacts
+**Job 2: Promotion Orchestrator Job** - Promotes builds across environments (DEV → QA → STAGE → PROD)
+
+To verify the jobs are created:
+
+```bash
+# Wait for Jenkins to fully initialize
+sleep 60
+
+# Access Jenkins UI at http://localhost:30000
+# Login with credentials from above
+
+# You should see two jobs on the dashboard:
+# 1. Release Build Job
+# 2. Promotion Orchestrator Job
+```
+
+#### Using Job 1: Release Build Job
+
+This job builds your application, creates a Git tag, pushes to registry, and archives artifacts.
+
+```bash
+# In Jenkins UI:
+# 1. Click on "Release Build Job"
+# 2. Click "Build with Parameters"
+# 3. Configure:
+#    - APPLICATION: app1-node (or app2-python)
+#    - VERSION: 1.0.0
+#    - DEPLOY_TO_DEV: ✓ (checked)
+# 4. Click "Build"
+
+# The job will:
+# ✓ Checkout code from GitHub
+# ✓ Validate application structure
+# ✓ Build Docker image
+# ✓ Run tests
+# ✓ Push image to local registry (localhost:5000)
+# ✓ Create Git tag (e.g., app1-node-1.0.0)
+# ✓ Archive artifacts:
+#   - release-metadata.json
+#   - Dockerfile
+#   - RELEASE_NOTES.txt
+# ✓ Deploy to DEV environment
+```
+
+#### Using Job 2: Promotion Orchestrator Job
+
+This job promotes a previously built version across environments.
+
+```bash
+# In Jenkins UI:
+# 1. Click on "Promotion Orchestrator Job"
+# 2. Click "Build with Parameters"
+# 3. Configure:
+#    - APPLICATION: app1-node
+#    - VERSION: 1.0.0 (must match a previous release build)
+#    - SOURCE_ENV: dev
+#    - TARGET_ENV: test
+# 4. Click "Build"
+
+# The job will:
+# ✓ List available builds from Release Build Job
+# ✓ Validate promotion path (dev→test, test→stage, stage→prod)
+# ✓ Verify version exists in source environment
+# ✓ Run validation tests
+# ✓ Update target environment GitOps config
+# ✓ Trigger ArgoCD sync
+# ✓ Verify deployment in target environment
+
+# Valid promotion paths:
+# dev → test → stage → prod
+```
+
+#### Viewing Archived Artifacts
+
+After a successful Release Build:
+
+```bash
+# In Jenkins UI:
+# 1. Click on "Release Build Job"
+# 2. Click on a successful build number (e.g., #1)
+# 3. Click "Build Artifacts" in the left menu
+# 4. Download:
+#    - release-metadata.json (build info with version, timestamp, git commit)
+#    - Dockerfile (used for the build)
+#    - RELEASE_NOTES.txt (release summary)
+```
+
+#### Testing the Complete Workflow
+
+```bash
+# Step 1: Build and release version 1.0.0
+# - Run Release Build Job with VERSION=1.0.0
+# - Wait for build to complete and deploy to DEV
+
+# Step 2: Verify in DEV
+kubectl get pods -n dev
+kubectl get svc -n dev
+
+# Step 3: Promote to TEST
+# - Run Promotion Orchestrator Job
+# - SOURCE_ENV=dev, TARGET_ENV=test, VERSION=1.0.0
+
+# Step 4: Verify in TEST
+kubectl get pods -n test
+
+# Step 5: Continue promotion through STAGE to PROD
+# - test → stage
+# - stage → prod
+```
+
+#### Monitoring Builds
+
+```bash
+# Watch Jenkins pod logs
+kubectl logs -f -n jenkins -l app=jenkins
+
+# Check build status via CLI
+# (First, get Jenkins CLI jar)
+wget http://localhost:30000/jnlpJars/jenkins-cli.jar
+
+# List jobs
+java -jar jenkins-cli.jar -s http://localhost:30000/ \
+  -auth admin:$JENKINS_PASSWORD list-jobs
+
+# Get build status
+java -jar jenkins-cli.jar -s http://localhost:30000/ \
+  -auth admin:$JENKINS_PASSWORD get-job "Release Build Job"
+```
+
 ---
 
 ## Phase 7: Build and Push Applications (15 minutes)
