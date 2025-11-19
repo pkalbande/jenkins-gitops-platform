@@ -41,7 +41,16 @@ jenkins:
   casc:
     config: |
       jenkins:
-        systemMessage: "Jenkins GitOps Platform - Managed by ArgoCD"
+        systemMessage: |
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="margin: 0 0 10px 0; font-size: 24px;">🚀 Jenkins GitOps Platform - LOCAL ENVIRONMENT</h2>
+            <p style="margin: 0; font-size: 14px; opacity: 0.9;">
+              <strong>Environment:</strong> Local Development | 
+              <strong>Managed by:</strong> ArgoCD | 
+              <strong>Cluster:</strong> Kind (kind-2) | 
+              <strong>Namespace:</strong> jenkins
+            </p>
+          </div>
         numExecutors: 2
         mode: NORMAL
         securityRealm:
