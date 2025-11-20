@@ -998,14 +998,15 @@ EOF
                     echo "Build: #${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
+                    def approver = 'system'
                     timeout(time: 24, unit: 'HOURS') {
-                        input message: "Approve API deployment to DEV environment?\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}", 
+                        approver = input message: "Approve API deployment to DEV environment?\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}", 
                               ok: 'Approve DEV Deployment',
                               submitter: 'admin,devops-team',
                               submitterParameter: 'DEV_APPROVER'
                     }
                     
-                    echo "✅ DEV Deployment Approved by: ${DEV_APPROVER}"
+                    echo "✅ DEV Deployment Approved by: ${approver}"
                     echo "=========================================="
                     echo "🚀 Deploying API to DEV"
                     echo "=========================================="
@@ -1041,14 +1042,15 @@ EOF
                     echo "Build: #${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
+                    def approver = 'system'
                     timeout(time: 48, unit: 'HOURS') {
-                        input message: "Approve API deployment to TEST environment?\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}\\n\\n⚠️  Lifecycle Check: DEV testing completed?", 
+                        approver = input message: "Approve API deployment to TEST environment?\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}\\n\\n⚠️  Lifecycle Check: DEV testing completed?", 
                               ok: 'Approve TEST Deployment',
                               submitter: 'admin,qa-team',
                               submitterParameter: 'TEST_APPROVER'
                     }
                     
-                    echo "✅ TEST Deployment Approved by: ${TEST_APPROVER}"
+                    echo "✅ TEST Deployment Approved by: ${approver}"
                     echo "=========================================="
                     echo "🚀 Deploying API to TEST"
                     echo "=========================================="
@@ -1085,14 +1087,15 @@ EOF
                     echo "Build: #${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
+                    def approver = 'system'
                     timeout(time: 72, unit: 'HOURS') {
-                        input message: "Approve API deployment to STAGE environment?\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}\\n\\n⚠️  Lifecycle Check: TEST validation completed?", 
+                        approver = input message: "Approve API deployment to STAGE environment?\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}\\n\\n⚠️  Lifecycle Check: TEST validation completed?", 
                               ok: 'Approve STAGE Deployment',
                               submitter: 'admin,release-manager',
                               submitterParameter: 'STAGE_APPROVER'
                     }
                     
-                    echo "✅ STAGE Deployment Approved by: ${STAGE_APPROVER}"
+                    echo "✅ STAGE Deployment Approved by: ${approver}"
                     echo "=========================================="
                     echo "🚀 Deploying API to STAGE"
                     echo "=========================================="
@@ -1130,14 +1133,15 @@ EOF
                     echo "Build: #${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
+                    def approver = 'system'
                     timeout(time: 168, unit: 'HOURS') {
-                        input message: "⚠️  PRODUCTION DEPLOYMENT APPROVAL\\n\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}\\n\\n🔒 Lifecycle Check: STAGE validation completed?\\n🔒 All approvals obtained?\\n🔒 Rollback plan ready?", 
+                        approver = input message: "⚠️  PRODUCTION DEPLOYMENT APPROVAL\\n\\nBuild: #${env.EFFECTIVE_BUILD_NUMBER}\\nAPI: ${params.APPLICATION}\\nVersion: ${params.API_VERSION}\\n\\n🔒 Lifecycle Check: STAGE validation completed?\\n🔒 All approvals obtained?\\n🔒 Rollback plan ready?", 
                               ok: 'APPROVE PRODUCTION DEPLOYMENT',
                               submitter: 'admin,production-approvers',
                               submitterParameter: 'PROD_APPROVER'
                     }
                     
-                    echo "✅ PRODUCTION Deployment Approved by: ${PROD_APPROVER}"
+                    echo "✅ PRODUCTION Deployment Approved by: ${approver}"
                     echo "=========================================="
                     echo "🚀 Deploying API to PRODUCTION"
                     echo "⚠️  PRODUCTION DEPLOYMENT IN PROGRESS"
