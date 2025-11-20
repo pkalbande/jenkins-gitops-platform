@@ -1718,21 +1718,22 @@ EOF
 //}
 
 // ==============================================================================
-// 🎯 PROMOTED BUILD PIPELINE JOB
+// 🎯 PROMOTED BUILD JOB (FREESTYLE)
 // ==============================================================================
-// Declarative pipeline with Promoted Builds plugin integration
+// Freestyle job with Promoted Builds plugin integration
 // Features:
 // - Build application with versioning
 // - Automatic promotion process with manual approvals
 // - Environment-based promotions (DEV -> QA -> STAGE -> PROD)
 // - Uses Promoted Builds plugin for visual promotion tracking
+// Note: Promoted Builds plugin only works with Freestyle jobs, not Pipeline jobs
 // ==============================================================================
 
-pipelineJob('promoted-build-pipeline') {
+freeStyleJob('promoted-build-job') {
     description('''
-🎯 Promoted Build Pipeline - Declarative Pipeline with Promoted Builds Plugin
+🎯 Promoted Build Job - Freestyle Job with Promoted Builds Plugin
 
-This job demonstrates how to use the Promoted Builds plugin with a declarative pipeline.
+This job demonstrates how to use the Promoted Builds plugin with a freestyle job.
 After a successful build, you can promote it through different environments:
 
 • DEV Environment - Manual approval by DevOps team
@@ -1742,7 +1743,7 @@ After a successful build, you can promote it through different environments:
 
 The promotion badges will appear on the build page after the initial build completes.
 ''')
-    displayName('🎯 Promoted Build Pipeline')
+    displayName('🎯 Promoted Build Job')
     
     properties {
         buildDiscarder {
@@ -1865,6 +1866,13 @@ cd apps/${APPLICATION}
         }
     }
     
+    logRotator {
+        daysToKeep(30)
+        numToKeep(20)
+        artifactDaysToKeep(30)
+        artifactNumToKeep(20)
+    }
+    
     parameters {
         choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
         stringParam('VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
@@ -1872,167 +1880,110 @@ cd apps/${APPLICATION}
         booleanParam('CREATE_ARTIFACTS', true, 'Create and archive build artifacts')
     }
     
-    definition {
-        cps {
-            script('''
-pipeline {
-    agent any
-    
-    environment {
-        BUILD_TIMESTAMP = sh(script: "date -u '+%Y-%m-%d %H:%M:%S'", returnStdout: true).trim()
-        GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-        GIT_BRANCH = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
-    }
-    
-    stages {
-        stage('Initialize') {
-            steps {
-                script {
-                    echo """
-╔══════════════════════════════════════════════════════════════════════╗
-║                   🚀 PROMOTED BUILD PIPELINE                          ║
-╚══════════════════════════════════════════════════════════════════════╝
-
-📦 Application:     ${params.APPLICATION}
-📌 Version:         ${params.VERSION}
-🔢 Build Number:    ${env.BUILD_NUMBER}
-📅 Build Time:      ${env.BUILD_TIMESTAMP}
-🌿 Git Branch:      ${env.GIT_BRANCH}
-📝 Git Commit:      ${env.GIT_COMMIT_SHORT}
-🧪 Run Tests:       ${params.RUN_TESTS}
-📦 Create Artifacts: ${params.CREATE_ARTIFACTS}
-
-This build will be available for promotion after successful completion.
-Promotions can be triggered from the build page.
-"""
-                }
+    scm {
+        git {
+            remote {
+                url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                credentials('github-token')
             }
-        }
-        
-        stage('Checkout') {
-            steps {
-                checkout scm
-                echo "✅ Source code checked out successfully"
-            }
-        }
-        
-        stage('Build Application') {
-            steps {
-                script {
-                    echo "🔨 Building ${params.APPLICATION} version ${params.VERSION}..."
-                    
-                    dir("apps/${params.APPLICATION}") {
-                        sh """
-                            echo "Building application..."
-                            echo "Application: ${params.APPLICATION}" > build-info.txt
-                            echo "Version: ${params.VERSION}" >> build-info.txt
-                            echo "Build Number: ${env.BUILD_NUMBER}" >> build-info.txt
-                            echo "Build Time: ${env.BUILD_TIMESTAMP}" >> build-info.txt
-                            echo "Git Commit: ${env.GIT_COMMIT_SHORT}" >> build-info.txt
-                            echo "Git Branch: ${env.GIT_BRANCH}" >> build-info.txt
-                            
-                            cat build-info.txt
-                        """
-                    }
-                    
-                    echo "✅ Build completed successfully"
-                }
-            }
-        }
-        
-        stage('Run Tests') {
-            when {
-                expression { params.RUN_TESTS == true }
-            }
-            steps {
-                script {
-                    echo "🧪 Running unit tests..."
-                    sh """
-                        echo "Running tests for ${params.APPLICATION}..."
-                        echo "All tests passed ✅"
-                    """
-                }
-            }
-        }
-        
-        stage('Create Artifacts') {
-            when {
-                expression { params.CREATE_ARTIFACTS == true }
-            }
-            steps {
-                script {
-                    echo "📦 Creating build artifacts..."
-                    
-                    dir("apps/${params.APPLICATION}") {
-                        sh """
-                            # Create versioned artifact
-                            tar -czf ${params.APPLICATION}-${params.VERSION}-${env.BUILD_NUMBER}.tar.gz \\
-                                Dockerfile *.html *.sh build-info.txt 2>/dev/null || true
-                            
-                            echo "Artifact created: ${params.APPLICATION}-${params.VERSION}-${env.BUILD_NUMBER}.tar.gz"
-                            ls -lh ${params.APPLICATION}-${params.VERSION}-${env.BUILD_NUMBER}.tar.gz || echo "No artifact file found"
-                        """
-                    }
-                    
-                    echo "✅ Artifacts created successfully"
-                }
-            }
-        }
-        
-        stage('Archive Results') {
-            steps {
-                script {
-                    echo "📁 Archiving build artifacts and metadata..."
-                    
-                    archiveArtifacts artifacts: "apps/${params.APPLICATION}/*.tar.gz, apps/${params.APPLICATION}/build-info.txt",
-                                     fingerprint: true,
-                                     allowEmptyArchive: true
-                    
-                    echo "✅ Artifacts archived"
-                }
-            }
+            branch('*/master')
         }
     }
     
-    post {
-        success {
-            script {
-                echo """
-╔══════════════════════════════════════════════════════════════════════╗
-║                       ✅ BUILD SUCCESSFUL                             ║
-╚══════════════════════════════════════════════════════════════════════╝
+    steps {
+        shell('''
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║                   🚀 PROMOTED BUILD JOB                              ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "📦 Application:     ${APPLICATION}"
+echo "📌 Version:         ${VERSION}"
+echo "🔢 Build Number:    ${BUILD_NUMBER}"
+echo "📅 Build Time:      $(date -u '+%Y-%m-%d %H:%M:%S')"
+echo "🌿 Git Branch:      $(git rev-parse --abbrev-ref HEAD)"
+echo "📝 Git Commit:      $(git rev-parse --short HEAD)"
+echo "🧪 Run Tests:       ${RUN_TESTS}"
+echo "📦 Create Artifacts: ${CREATE_ARTIFACTS}"
+echo ""
+echo "This build will be available for promotion after successful completion."
+echo "Promotions can be triggered from the build page."
+echo ""
 
-🎉 Build #${env.BUILD_NUMBER} completed successfully!
+# Build Application
+echo "🔨 Building ${APPLICATION} version ${VERSION}..."
+cd apps/${APPLICATION}
 
-📦 Application: ${params.APPLICATION}
-📌 Version: ${params.VERSION}
+echo "Building application..."
+cat > build-info.txt << EOF
+Application: ${APPLICATION}
+Version: ${VERSION}
+Build Number: ${BUILD_NUMBER}
+Build Time: $(date -u '+%Y-%m-%d %H:%M:%S')
+Git Commit: $(git rev-parse --short HEAD)
+Git Branch: $(git rev-parse --abbrev-ref HEAD)
+EOF
 
-🎯 NEXT STEPS - Promote this build:
-   1. Navigate to this build page
-   2. Click on "Promotion Status" in the left menu
-   3. Promote to DEV environment first
-   4. After DEV validation, promote to QA
-   5. Continue through STAGE and PROD as needed
+echo ""
+echo "Build Info:"
+cat build-info.txt
+echo ""
+echo "✅ Build completed successfully"
 
-Each promotion requires manual approval from authorized users.
-"""
-            }
-        }
-        failure {
-            script {
-                echo """
-╔══════════════════════════════════════════════════════════════════════╗
-║                         ❌ BUILD FAILED                               ║
-╚══════════════════════════════════════════════════════════════════════╝
+# Run Tests (if enabled)
+if [ "${RUN_TESTS}" = "true" ]; then
+    echo ""
+    echo "🧪 Running unit tests..."
+    echo "Running tests for ${APPLICATION}..."
+    echo "All tests passed ✅"
+fi
 
-Build #${env.BUILD_NUMBER} failed. Please check the logs above.
-"""
-            }
-        }
+# Create Artifacts (if enabled)
+if [ "${CREATE_ARTIFACTS}" = "true" ]; then
+    echo ""
+    echo "📦 Creating build artifacts..."
+    
+    # Create versioned artifact
+    tar -czf ${APPLICATION}-${VERSION}-${BUILD_NUMBER}.tar.gz \\
+        Dockerfile *.html *.sh build-info.txt 2>/dev/null || true
+    
+    if [ -f "${APPLICATION}-${VERSION}-${BUILD_NUMBER}.tar.gz" ]; then
+        echo "Artifact created: ${APPLICATION}-${VERSION}-${BUILD_NUMBER}.tar.gz"
+        ls -lh ${APPLICATION}-${VERSION}-${BUILD_NUMBER}.tar.gz
+    else
+        echo "⚠️  No artifact file created"
+    fi
+    echo "✅ Artifacts created successfully"
+fi
+
+cd ../..
+
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║                       ✅ BUILD SUCCESSFUL                             ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "🎉 Build #${BUILD_NUMBER} completed successfully!"
+echo ""
+echo "📦 Application: ${APPLICATION}"
+echo "📌 Version: ${VERSION}"
+echo ""
+echo "🎯 NEXT STEPS - Promote this build:"
+echo "   1. Navigate to this build page"
+echo "   2. Click on 'Promotion Status' in the left menu"
+echo "   3. Promote to DEV environment first"
+echo "   4. After DEV validation, promote to QA"
+echo "   5. Continue through STAGE and PROD as needed"
+echo ""
+echo "Each promotion requires manual approval from authorized users."
+echo ""
+        ''')
     }
-}
-            '''.stripIndent())
-            sandbox(true)
+    
+    publishers {
+        archiveArtifacts {
+            pattern('apps/*/build-info.txt, apps/*/*.tar.gz')
+            fingerprint(true)
+            allowEmpty(true)
         }
     }
 }
