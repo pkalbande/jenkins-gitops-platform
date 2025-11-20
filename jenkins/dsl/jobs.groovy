@@ -696,3 +696,134 @@ pipeline {
         }
     }
 }
+
+
+
+// Pipeline Job 2: Selective Promotion Pipeline
+pipelineJob('selective-promotion-pipeline-v2') {
+    description('🎯 Selective Promotion Pipeline - Manually select environment to deploy a specific build')
+    displayName('🎯 Selective Promotion Pipeline')
+    
+    logRotator {
+        daysToKeep(60)
+        numToKeep(20)
+        artifactDaysToKeep(60)
+        artifactNumToKeep(20)
+    }
+    
+    parameters {
+        stringParam('BUILD_NUMBER', '', 'Build number to promote (from release-pipeline-job)')
+        choiceParam('TARGET_ENVIRONMENT', ['TEST', 'STAGE', 'PROD'], 'Select target environment')
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application')
+        stringParam('VERSION', '1.0.0', 'Version to promote')
+        textParam('APPROVAL_NOTES', '', 'Approval notes and justification')
+    }
+    
+    definition {
+        cps {
+            script('''
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'BUILD_NUMBER', defaultValue: '', description: 'Build number to promote')
+        choice(name: 'TARGET_ENVIRONMENT', choices: ['TEST', 'STAGE', 'PROD'], description: 'Target environment')
+        choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Application')
+        string(name: 'VERSION', defaultValue: '1.0.0', description: 'Version to promote')
+        text(name: 'APPROVAL_NOTES', defaultValue: '', description: 'Approval notes')
+    }
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "🔍 Validating Promotion Request"
+                    echo "=========================================="
+                    echo "Build Number: ${params.BUILD_NUMBER}"
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Version: ${params.VERSION}"
+                    echo "Target Environment: ${params.TARGET_ENVIRONMENT}"
+                    echo "Approval Notes: ${params.APPROVAL_NOTES}"
+                    echo "=========================================="
+                    
+                    if (!params.BUILD_NUMBER) {
+                        error("BUILD_NUMBER is required!")
+                    }
+                }
+            }
+        }
+        
+        stage('Approval') {
+            when {
+                expression { params.TARGET_ENVIRONMENT in ['STAGE', 'PROD'] }
+            }
+            steps {
+                script {
+                    def approvalMessage = "Promote build #${params.BUILD_NUMBER} to ${params.TARGET_ENVIRONMENT}?"
+                    
+                    echo "=========================================="
+                    echo "⏸️  Approval Required for ${params.TARGET_ENVIRONMENT}"
+                    echo "=========================================="
+                    
+                    timeout(time: 48, unit: 'HOURS') {
+                        input message: approvalMessage,
+                              ok: "Approve ${params.TARGET_ENVIRONMENT} Promotion",
+                              submitter: 'admin',
+                              submitterParameter: 'APPROVER'
+                    }
+                }
+            }
+        }
+        
+        stage('Checkout') {
+            steps {
+                echo "📥 Checking out source code"
+                git branch: 'master', 
+                    credentialsId: 'github-token', 
+                    url: 'https://github.com/pkalbande/jenkins-gitops-platform.git'
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "🎯 Deploying to ${params.TARGET_ENVIRONMENT}"
+                    echo "=========================================="
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            chmod +x deploy.sh
+                            ./deploy.sh ${params.TARGET_ENVIRONMENT} ${params.VERSION} ${params.BUILD_NUMBER}
+                        """
+                    }
+                    
+                    echo "=========================================="
+                    echo "📝 Promotion Log Entry:"
+                    echo "Timestamp: \\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                    echo "Build: #${params.BUILD_NUMBER}"
+                    echo "Environment: ${params.TARGET_ENVIRONMENT}"
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Version: ${params.VERSION}"
+                    echo "Notes: ${params.APPROVAL_NOTES}"
+                    echo "=========================================="
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "✅ Successfully promoted build #${params.BUILD_NUMBER} to ${params.TARGET_ENVIRONMENT}"
+        }
+        failure {
+            echo "❌ Failed to promote build #${params.BUILD_NUMBER} to ${params.TARGET_ENVIRONMENT}"
+        }
+    }
+}
+            '''.stripIndent())
+            sandbox()
+        }
+    }
+}
