@@ -699,7 +699,7 @@ pipeline {
 
 
 
-// Pipeline Job 2: Selective Promotion Pipeline
+/* Pipeline Job 2: Selective Promotion Pipeline
 pipelineJob('selective-promotion-pipeline-v2') {
     description('🎯 Selective Promotion Pipeline v2 - Manually select environment to deploy a specific build')
     displayName('🎯 Selective Promotion Pipeline-v2')
@@ -827,6 +827,7 @@ pipeline {
         }
     }
 }
+*/
 // ==============================================================================
 // NEW JOBS: API Lifecycle Pipeline with Build Reuse and Restart Capability
 // ==============================================================================
