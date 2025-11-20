@@ -1266,6 +1266,15 @@ echo "Target Environment: ${TARGET_ENVIRONMENT}"
 echo "Require Approval: ${REQUIRE_APPROVAL}"
 echo "=========================================="
 
+# Verify workspace has source code
+if [ ! -d "apps/${APPLICATION}" ]; then
+    echo "❌ ERROR: Application directory apps/${APPLICATION} not found"
+    echo "Current directory: $(pwd)"
+    echo "Contents:"
+    ls -la
+    exit 1
+fi
+
 # Determine the build number to use
 if [ "${ACTION}" = "BUILD_NEW" ]; then
     EFFECTIVE_BUILD="${BUILD_NUMBER}"
@@ -1339,9 +1348,26 @@ fi
 # Perform deployment
 echo ""
 echo "🚀 Executing Deployment..."
+
+# Navigate to application directory
+if [ ! -d "apps/${APPLICATION}" ]; then
+    echo "❌ ERROR: Application directory apps/${APPLICATION} not found in workspace"
+    exit 1
+fi
+
 cd apps/${APPLICATION}
+
+# Check if deploy script exists
+if [ ! -f "deploy.sh" ]; then
+    echo "❌ ERROR: deploy.sh not found in apps/${APPLICATION}"
+    exit 1
+fi
+
 chmod +x deploy.sh
 ./deploy.sh ${TARGET_ENVIRONMENT} ${API_VERSION} ${EFFECTIVE_BUILD}
+
+# Return to workspace root
+cd ../..
 
 # Log deployment
 echo ""
@@ -1359,7 +1385,7 @@ echo "Notes: ${DEPLOYMENT_NOTES}"
 echo "Build URL: ${BUILD_URL}"
 echo "=========================================="
 
-# Create deployment record
+# Create deployment record in workspace root
 cat > deployment-record-${EFFECTIVE_BUILD}-${TARGET_ENVIRONMENT}.json << EOF
 {
   "deployment_id": "${BUILD_NUMBER}",
@@ -1395,9 +1421,9 @@ echo "=========================================="
     
     publishers {
         archiveArtifacts {
-            pattern('apps/*/api-build-*.json, apps/*/deployment-record-*.json')
+            pattern('apps/*/api-build-*.json, deployment-record-*.json')
             fingerprint(true)
-            allowEmpty(false)
+            allowEmpty(true)
         }
         
         extendedEmail {
