@@ -78,7 +78,7 @@ pipelineJob('release-build-job') {
 }
 
 pipelineJob('promotion-orchestrator-job') {
-    description('🎯 Promotion Orchestrator Job - Select and promote previous builds across environments (DEV → QA → STAGE → PROD)')
+    description('🎯 Promotion Orchestrator Job - Select and promote previous builds across environments (DEV -> QA -> STAGE -> PROD)')
     displayName('🎯 Promotion Orchestrator Job')
     
     properties {
