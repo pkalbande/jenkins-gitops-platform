@@ -9,6 +9,13 @@ metadata:
 data:
   01-create-seed-job.groovy: |
     import jenkins.model.Jenkins
+    import hudson.model.FreeStyleProject
+    import hudson.plugins.git.GitSCM
+    import hudson.plugins.git.UserRemoteConfig
+    import hudson.plugins.git.BranchSpec
+    import javaposse.jobdsl.plugin.ExecuteDslScripts
+    import javaposse.jobdsl.plugin.RemovedJobAction
+    import javaposse.jobdsl.plugin.LookupStrategy
 
     def jenkins = Jenkins.instance
     def jobName = 'seed-job'
@@ -20,119 +27,32 @@ data:
         return
     }
 
-    println "🌱 Creating seed job '${jobName}' using XML configuration..."
+    println "🌱 Creating seed job '${jobName}'..."
 
-    // Create job from XML
-    def xml = '''<?xml version='1.1' encoding='UTF-8'?>
-    <project>
-      <description>Seed job that creates other Jenkins jobs from inline DSL script</description>
-      <keepDependencies>false</keepDependencies>
-      <properties/>
-      <scm class="hudson.scm.NullSCM"/>
-      <canRoam>true</canRoam>
-      <disabled>false</disabled>
-      <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
-      <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
-      <triggers/>
-      <concurrentBuild>false</concurrentBuild>
-      <builders>
-    <javaposse.jobdsl.plugin.ExecuteDslScripts>
-      <scriptText><![CDATA[
-pipelineJob('release-build-job') {
-    description('Release Build Job - Build code, create versioned release, and archive artifacts using Release Plugin')
-    displayName('Release Build Job')
-    
-    properties {
-        buildDiscarder {
-            strategy {
-                logRotator {
-                    daysToKeepStr('30')
-                    numToKeepStr('10')
-                    artifactDaysToKeepStr('30')
-                    artifactNumToKeepStr('10')
-                }
-            }
-        }
-    }
-    
-    parameters {
-        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
-        stringParam('VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
-        booleanParam('DEPLOY_TO_DEV', true, 'Automatically deploy to dev environment after build')
-    }
-    
-    definition {
-        cpsScm {
-            scm {
-                git {
-                    remote {
-                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
-                        credentials('github-token')
-                    }
-                    branch('*/master')
-                }
-            }
-            scriptPath('jenkins/pipelines/release-build/Jenkinsfile')
-        }
-    }
-}
+    // Create freestyle project
+    def seedJob = jenkins.createProject(FreeStyleProject, jobName)
+    seedJob.setDisplayName('🌱 DSL Seed Job')
+    seedJob.setDescription('Seed job that creates other Jenkins jobs from DSL scripts in Git')
 
-pipelineJob('promotion-orchestrator-job') {
-    description('Promotion Orchestrator Job - Select and promote previous builds across environments (DEV -> QA -> STAGE -> PROD)')
-    displayName('Promotion Orchestrator Job')
-    
-    properties {
-        buildDiscarder {
-            strategy {
-                logRotator {
-                    daysToKeepStr('60')
-                    numToKeepStr('20')
-                    artifactDaysToKeepStr('60')
-                    artifactNumToKeepStr('20')
-                }
-            }
-        }
-    }
-    
-    parameters {
-        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to promote')
-        stringParam('BUILD_NUMBER', '', 'Build number from release-build-job to promote')
-        stringParam('VERSION', '', 'Version to promote (e.g., 1.0.0)')
-        choiceParam('PROMOTION_LEVEL', ['Deploy-to-DEV', 'Deploy-to-QA', 'Deploy-to-STAGE', 'Deploy-to-PROD'], 'Select promotion level')
-        textParam('APPROVAL_NOTES', '', 'Approval notes and justification')
-    }
-    
-    definition {
-        cpsScm {
-            scm {
-                git {
-                    remote {
-                        url('https://github.com/pkalbande/jenkins-gitops-platform.git')
-                        credentials('github-token')
-                    }
-                    branch('*/master')
-                }
-            }
-            scriptPath('jenkins/pipelines/promotion-orchestrator/Jenkinsfile')
-        }
-    }
-}
-      ]]></scriptText>
-      <usingScriptText>true</usingScriptText>
-      <sandbox>false</sandbox>
-      <removedJobAction>IGNORE</removedJobAction>
-      <removedViewAction>IGNORE</removedViewAction>
-      <removedConfigFilesAction>IGNORE</removedConfigFilesAction>
-      <lookupStrategy>JENKINS_ROOT</lookupStrategy>
-    </javaposse.jobdsl.plugin.ExecuteDslScripts>
-  </builders>
-      <publishers/>
-      <buildWrappers/>
-    </project>'''
+    // Configure Git SCM
+    def gitUrl = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
+    def credentialsId = 'github-token'
+    def branch = '*/master'
 
-    // Create job from XML
-    def xmlStream = new ByteArrayInputStream(xml.getBytes())
-    jenkins.createProjectFromXML(jobName, xmlStream)
+    def userRemoteConfig = new UserRemoteConfig(gitUrl, '', '', credentialsId)
+    def branchSpec = new BranchSpec(branch)
+    def scm = new GitSCM([userRemoteConfig], [branchSpec], null, null, [])
+    seedJob.setScm(scm)
+
+    // Add DSL build step
+    def dslBuilder = new ExecuteDslScripts()
+    dslBuilder.setTargets('jenkins/dsl/jobs.groovy')
+    dslBuilder.setRemovedJobAction(RemovedJobAction.IGNORE)
+    dslBuilder.setLookupStrategy(LookupStrategy.JENKINS_ROOT)
+    seedJob.getBuildersList().add(dslBuilder)
+
+    // Save job
+    seedJob.save()
 
     println "✅ Seed job '${jobName}' created successfully!"
-    println "🎯 Jenkins will now execute the DSL script to create other jobs"
+    println "🎯 To create the other jobs, trigger this seed job manually or via API"
