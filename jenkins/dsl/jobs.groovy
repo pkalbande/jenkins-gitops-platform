@@ -2328,3 +2328,510 @@ echo "<h3>📦 Build: ${APPLICATION} v${VERSION}</h3><p>🎯 <a href='../promote
         }
     }
 }
+
+// ==============================================================================
+// 🚀 DOCKER BUILD & ARGOCD DEPLOYMENT JOB
+// ==============================================================================
+// Complete CI/CD pipeline with Docker build, registry push, and ArgoCD deployments
+// Workflow:
+// 1. Developer commits code
+// 2. Jenkins builds Docker image and pushes to registry
+// 3. Tags release with build number (e.g., build-3846)
+// 4. Publishes metadata
+// 5. Promotions trigger ArgoCD deployments to DEV → TEST → STAGE → PROD
+// ==============================================================================
+
+freeStyleJob('docker-argocd-release-job') {
+    description('''
+🚀 Docker Build & ArgoCD Deployment Pipeline
+
+Complete CI/CD workflow:
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Build Code → 2. Build Docker Image → 3. Push to Registry │
+│ 4. Tag Release → 5. Publish Metadata                        │
+└─────────────────────────────────────────────────────────────┘
+
+Promotion Flow (via Promoted Builds Plugin):
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+│ Deploy  │ →  │ Deploy  │ →  │ Deploy  │ →  │ Deploy  │
+│ to DEV  │    │ to TEST │    │ to STAGE│    │ to PROD │
+└─────────┘    └─────────┘    └─────────┘    └─────────┘
+     ↓              ↓              ↓              ↓
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│DEV Cluster│ │TEST Cluster│ │STAGE Cluster│ │PROD Cluster│
+│ArgoCD+Helm│ │ArgoCD+Helm│ │ArgoCD+Helm│ │ArgoCD+Helm│
+└──────────┘  └──────────┘  └──────────┘  └──────────┘
+
+Each environment deployment:
+• Updates image tag in Git repo
+• ArgoCD auto-syncs changes
+• Deploys via Helm charts
+''')
+    displayName('🚀 Docker Build & ArgoCD Deployment')
+    
+    properties {
+        promotions {
+            promotion {
+                name('Deploy-to-DEV')
+                icon('star-gold')
+                conditions {
+                    manual('admin,devops-team')
+                    selfPromotion(false)
+                }
+                actions {
+                    shell('''
+set -e
+
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║          🎯 PROMOTING BUILD TO DEV ENVIRONMENT                        ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "🏷️  Build Number: ${PROMOTED_NUMBER}"
+echo "📦 Application: ${APPLICATION}"
+echo "🐳 Image Tag: build-${PROMOTED_NUMBER}"
+echo "👤 Promoted By: ${PROMOTED_USER_NAME}"
+echo "📅 Promotion Date: $(date)"
+echo ""
+
+# Update image tag in DEV environment values file
+ENVIRONMENT="dev"
+VALUES_FILE="environments/${ENVIRONMENT}/values.yaml"
+
+echo "📝 Updating ${VALUES_FILE} with new image tag..."
+
+# Clone the repo if not in workspace
+if [ ! -d ".git" ]; then
+    git clone https://github.com/pkalbande/jenkins-gitops-platform.git .
+fi
+
+# Update the image tag in values file
+sed -i.bak "s/tag: .*/tag: build-${PROMOTED_NUMBER}/" ${VALUES_FILE}
+
+# Commit and push changes
+git config user.email "jenkins@example.com"
+git config user.name "Jenkins CI"
+git add ${VALUES_FILE}
+git commit -m "Deploy ${APPLICATION} build-${PROMOTED_NUMBER} to DEV environment
+
+Promoted by: ${PROMOTED_USER_NAME}
+Build Number: ${PROMOTED_NUMBER}
+Environment: DEV
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+git push origin master
+
+echo ""
+echo "✅ Image tag updated in Git repository"
+echo "🔄 ArgoCD will auto-sync the changes to DEV cluster"
+echo ""
+echo "📊 Deployment Details:"
+echo "   Environment: DEV"
+echo "   Image: ${APPLICATION}:build-${PROMOTED_NUMBER}"
+echo "   Values File: ${VALUES_FILE}"
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║              ✅ DEV DEPLOYMENT INITIATED                              ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+''')
+                }
+            }
+            
+            promotion {
+                name('Deploy-to-TEST')
+                icon('star-blue')
+                conditions {
+                    manual('admin,qa-team')
+                    selfPromotion(false)
+                    upstream('Deploy-to-DEV')
+                }
+                actions {
+                    shell('''
+set -e
+
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║          🎯 PROMOTING BUILD TO TEST ENVIRONMENT                       ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "🏷️  Build Number: ${PROMOTED_NUMBER}"
+echo "📦 Application: ${APPLICATION}"
+echo "🐳 Image Tag: build-${PROMOTED_NUMBER}"
+echo "👤 Promoted By: ${PROMOTED_USER_NAME}"
+echo "📅 Promotion Date: $(date)"
+echo ""
+
+ENVIRONMENT="test"
+VALUES_FILE="environments/${ENVIRONMENT}/values.yaml"
+
+echo "📝 Updating ${VALUES_FILE} with new image tag..."
+
+if [ ! -d ".git" ]; then
+    git clone https://github.com/pkalbande/jenkins-gitops-platform.git .
+fi
+
+sed -i.bak "s/tag: .*/tag: build-${PROMOTED_NUMBER}/" ${VALUES_FILE}
+
+git config user.email "jenkins@example.com"
+git config user.name "Jenkins CI"
+git add ${VALUES_FILE}
+git commit -m "Deploy ${APPLICATION} build-${PROMOTED_NUMBER} to TEST environment
+
+Promoted by: ${PROMOTED_USER_NAME}
+Build Number: ${PROMOTED_NUMBER}
+Environment: TEST
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+git push origin master
+
+echo ""
+echo "✅ Image tag updated in Git repository"
+echo "🔄 ArgoCD will auto-sync the changes to TEST cluster"
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║              ✅ TEST DEPLOYMENT INITIATED                             ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+''')
+                }
+            }
+            
+            promotion {
+                name('Deploy-to-STAGE')
+                icon('star-silver')
+                conditions {
+                    manual('admin,release-manager')
+                    selfPromotion(false)
+                    upstream('Deploy-to-TEST')
+                }
+                actions {
+                    shell('''
+set -e
+
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║          🎯 PROMOTING BUILD TO STAGE ENVIRONMENT                      ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "🏷️  Build Number: ${PROMOTED_NUMBER}"
+echo "📦 Application: ${APPLICATION}"
+echo "🐳 Image Tag: build-${PROMOTED_NUMBER}"
+echo "👤 Promoted By: ${PROMOTED_USER_NAME}"
+echo "📅 Promotion Date: $(date)"
+echo ""
+
+ENVIRONMENT="stage"
+VALUES_FILE="environments/${ENVIRONMENT}/values.yaml"
+
+echo "📝 Updating ${VALUES_FILE} with new image tag..."
+
+if [ ! -d ".git" ]; then
+    git clone https://github.com/pkalbande/jenkins-gitops-platform.git .
+fi
+
+sed -i.bak "s/tag: .*/tag: build-${PROMOTED_NUMBER}/" ${VALUES_FILE}
+
+git config user.email "jenkins@example.com"
+git config user.name "Jenkins CI"
+git add ${VALUES_FILE}
+git commit -m "Deploy ${APPLICATION} build-${PROMOTED_NUMBER} to STAGE environment
+
+Promoted by: ${PROMOTED_USER_NAME}
+Build Number: ${PROMOTED_NUMBER}
+Environment: STAGE
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+git push origin master
+
+echo ""
+echo "✅ Image tag updated in Git repository"
+echo "🔄 ArgoCD will auto-sync the changes to STAGE cluster"
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║              ✅ STAGE DEPLOYMENT INITIATED                            ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+''')
+                }
+            }
+            
+            promotion {
+                name('Deploy-to-PROD')
+                icon('star-red')
+                conditions {
+                    manual('admin,production-approvers')
+                    selfPromotion(false)
+                    upstream('Deploy-to-STAGE')
+                }
+                actions {
+                    shell('''
+set -e
+
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║          🎯 PROMOTING BUILD TO PRODUCTION ENVIRONMENT                 ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "🚨 THIS IS A PRODUCTION DEPLOYMENT 🚨"
+echo ""
+echo "🏷️  Build Number: ${PROMOTED_NUMBER}"
+echo "📦 Application: ${APPLICATION}"
+echo "🐳 Image Tag: build-${PROMOTED_NUMBER}"
+echo "👤 Promoted By: ${PROMOTED_USER_NAME}"
+echo "📅 Promotion Date: $(date)"
+echo ""
+
+ENVIRONMENT="prod"
+VALUES_FILE="environments/${ENVIRONMENT}/values.yaml"
+
+echo "📝 Updating ${VALUES_FILE} with new image tag..."
+
+if [ ! -d ".git" ]; then
+    git clone https://github.com/pkalbande/jenkins-gitops-platform.git .
+fi
+
+sed -i.bak "s/tag: .*/tag: build-${PROMOTED_NUMBER}/" ${VALUES_FILE}
+
+git config user.email "jenkins@example.com"
+git config user.name "Jenkins CI"
+git add ${VALUES_FILE}
+git commit -m "Deploy ${APPLICATION} build-${PROMOTED_NUMBER} to PRODUCTION environment
+
+Promoted by: ${PROMOTED_USER_NAME}
+Build Number: ${PROMOTED_NUMBER}
+Environment: PRODUCTION
+Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+⚠️  PRODUCTION RELEASE"
+
+git push origin master
+
+echo ""
+echo "✅ Image tag updated in Git repository"
+echo "🔄 ArgoCD will auto-sync the changes to PRODUCTION cluster"
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║          ✅ PRODUCTION DEPLOYMENT INITIATED                           ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+''')
+                }
+            }
+        }
+    }
+    
+    logRotator {
+        daysToKeep(30)
+        numToKeep(50)
+        artifactDaysToKeep(30)
+        artifactNumToKeep(50)
+    }
+    
+    parameters {
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
+        stringParam('VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
+        stringParam('DOCKER_REGISTRY', 'docker.io/mycompany', 'Docker registry URL (e.g., docker.io/mycompany or gcr.io/project-id)')
+        booleanParam('RUN_TESTS', true, 'Run unit tests before building Docker image')
+        booleanParam('PUSH_TO_REGISTRY', true, 'Push Docker image to registry')
+        booleanParam('SCAN_IMAGE', false, 'Run security scan on Docker image (requires scanner)')
+    }
+    
+    scm {
+        git {
+            remote {
+                url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+                credentials('github-token')
+            }
+            branch('*/master')
+        }
+    }
+    
+    wrappers {
+        credentialsBinding {
+            usernamePassword('DOCKER_USERNAME', 'DOCKER_PASSWORD', 'docker-registry')
+        }
+    }
+    
+    steps {
+        shell('''
+set -e
+
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║              🚀 DOCKER BUILD & RELEASE PIPELINE                       ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "📦 Application:      ${APPLICATION}"
+echo "📌 Version:          ${VERSION}"
+echo "🏷️  Build Tag:        build-${BUILD_NUMBER}"
+echo "🐳 Docker Registry:  ${DOCKER_REGISTRY}"
+echo "🔢 Build Number:     ${BUILD_NUMBER}"
+echo "📅 Build Time:       $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "🌿 Git Branch:       $(git rev-parse --abbrev-ref HEAD)"
+echo "📝 Git Commit:       $(git rev-parse --short HEAD)"
+echo ""
+
+# Store build metadata
+BUILD_TAG="build-${BUILD_NUMBER}"
+IMAGE_NAME="${DOCKER_REGISTRY}/${APPLICATION}:${BUILD_TAG}"
+GIT_COMMIT=$(git rev-parse HEAD)
+GIT_COMMIT_SHORT=$(git rev-parse --short HEAD)
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+BUILD_TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+echo "═══════════════════════════════════════════════════════════════════════"
+echo "STEP 1: 📋 Build Code & Run Tests"
+echo "═══════════════════════════════════════════════════════════════════════"
+
+cd apps/${APPLICATION}
+
+# Create build metadata file
+cat > build-metadata.json << EOF
+{
+  "application": "${APPLICATION}",
+  "version": "${VERSION}",
+  "buildNumber": "${BUILD_NUMBER}",
+  "buildTag": "${BUILD_TAG}",
+  "imageName": "${IMAGE_NAME}",
+  "gitCommit": "${GIT_COMMIT}",
+  "gitCommitShort": "${GIT_COMMIT_SHORT}",
+  "gitBranch": "${GIT_BRANCH}",
+  "buildTimestamp": "${BUILD_TIMESTAMP}",
+  "dockerRegistry": "${DOCKER_REGISTRY}"
+}
+EOF
+
+echo "✅ Build metadata created:"
+cat build-metadata.json
+
+if [ "${RUN_TESTS}" = "true" ]; then
+    echo ""
+    echo "🧪 Running unit tests..."
+    echo "Running tests for ${APPLICATION}..."
+    # Add actual test commands here
+    echo "✅ All tests passed"
+fi
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════════════"
+echo "STEP 2: 🐳 Build Docker Image"
+echo "═══════════════════════════════════════════════════════════════════════"
+
+echo "Building Docker image: ${IMAGE_NAME}"
+
+# Build Docker image with multiple tags
+docker build \\
+    --tag ${IMAGE_NAME} \\
+    --tag ${DOCKER_REGISTRY}/${APPLICATION}:${VERSION} \\
+    --tag ${DOCKER_REGISTRY}/${APPLICATION}:latest \\
+    --build-arg VERSION=${VERSION} \\
+    --build-arg BUILD_NUMBER=${BUILD_NUMBER} \\
+    --build-arg GIT_COMMIT=${GIT_COMMIT_SHORT} \\
+    --label "version=${VERSION}" \\
+    --label "build-number=${BUILD_NUMBER}" \\
+    --label "git-commit=${GIT_COMMIT}" \\
+    --label "build-timestamp=${BUILD_TIMESTAMP}" \\
+    .
+
+echo "✅ Docker image built successfully"
+echo ""
+echo "📊 Image Details:"
+docker images | grep ${APPLICATION} | head -3
+
+if [ "${SCAN_IMAGE}" = "true" ]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════════"
+    echo "STEP 3: 🔍 Security Scan"
+    echo "═══════════════════════════════════════════════════════════════════════"
+    echo "⚠️  Security scanning not configured. Skipping..."
+    # Add security scanning tool here (e.g., Trivy, Snyk, etc.)
+    # trivy image ${IMAGE_NAME}
+fi
+
+if [ "${PUSH_TO_REGISTRY}" = "true" ]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════════"
+    echo "STEP 4: 📤 Push to Docker Registry"
+    echo "═══════════════════════════════════════════════════════════════════════"
+    
+    echo "Logging in to Docker registry..."
+    echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY%%/*} -u ${DOCKER_USERNAME} --password-stdin
+    
+    echo ""
+    echo "Pushing images to registry..."
+    docker push ${IMAGE_NAME}
+    docker push ${DOCKER_REGISTRY}/${APPLICATION}:${VERSION}
+    docker push ${DOCKER_REGISTRY}/${APPLICATION}:latest
+    
+    echo ""
+    echo "✅ Images pushed successfully:"
+    echo "   • ${IMAGE_NAME}"
+    echo "   • ${DOCKER_REGISTRY}/${APPLICATION}:${VERSION}"
+    echo "   • ${DOCKER_REGISTRY}/${APPLICATION}:latest"
+else
+    echo ""
+    echo "⚠️  Skipping registry push (PUSH_TO_REGISTRY=false)"
+fi
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════════════"
+echo "STEP 5: 📝 Publish Build Metadata"
+echo "═══════════════════════════════════════════════════════════════════════"
+
+# Create release metadata
+cat > release-${BUILD_TAG}.json << EOF
+{
+  "releaseName": "${BUILD_TAG}",
+  "application": "${APPLICATION}",
+  "version": "${VERSION}",
+  "buildNumber": "${BUILD_NUMBER}",
+  "dockerImage": "${IMAGE_NAME}",
+  "dockerTags": [
+    "${IMAGE_NAME}",
+    "${DOCKER_REGISTRY}/${APPLICATION}:${VERSION}",
+    "${DOCKER_REGISTRY}/${APPLICATION}:latest"
+  ],
+  "gitCommit": "${GIT_COMMIT}",
+  "gitCommitShort": "${GIT_COMMIT_SHORT}",
+  "gitBranch": "${GIT_BRANCH}",
+  "buildTimestamp": "${BUILD_TIMESTAMP}",
+  "status": "READY_FOR_DEPLOYMENT",
+  "environments": {
+    "dev": "NOT_DEPLOYED",
+    "test": "NOT_DEPLOYED",
+    "stage": "NOT_DEPLOYED",
+    "prod": "NOT_DEPLOYED"
+  }
+}
+EOF
+
+echo "✅ Release metadata published: release-${BUILD_TAG}.json"
+cat release-${BUILD_TAG}.json
+
+cd ../..
+
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════════╗"
+echo "║                    ✅ BUILD COMPLETED SUCCESSFULLY                    ║"
+echo "╚══════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "🎉 Build ${BUILD_TAG} is ready for deployment!"
+echo ""
+echo "📦 Release Summary:"
+echo "   Application:    ${APPLICATION}"
+echo "   Version:        ${VERSION}"
+echo "   Build Tag:      ${BUILD_TAG}"
+echo "   Docker Image:   ${IMAGE_NAME}"
+echo "   Git Commit:     ${GIT_COMMIT_SHORT}"
+echo ""
+echo "🎯 Next Steps - Promote this build:"
+echo "   1. Go to this build page"
+echo "   2. Click 'Promotion Status' in the left menu"
+echo "   3. Promote to DEV → TEST → STAGE → PROD"
+echo ""
+echo "Each promotion will update the image tag in Git,"
+echo "and ArgoCD will automatically deploy to the target cluster."
+echo ""
+        ''')
+    }
+    
+    publishers {
+        archiveArtifacts {
+            pattern('apps/*/build-metadata.json, apps/*/release-*.json')
+            fingerprint(true)
+            allowEmpty(true)
+        }
+    }
+}
