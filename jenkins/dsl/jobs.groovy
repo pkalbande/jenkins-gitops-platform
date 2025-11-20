@@ -1748,7 +1748,9 @@ The promotion badges will appear on the build page after the initial build compl
         buildDiscarder {
             strategy {
                 logRotator {
+                    daysToKeepStr('30')
                     numToKeepStr('20')
+                    artifactDaysToKeepStr('30')
                     artifactNumToKeepStr('20')
                 }
             }
