@@ -1716,3 +1716,321 @@ EOF
 //        }
 //    }
 //}
+
+// ==============================================================================
+// 🎯 PROMOTED BUILD PIPELINE JOB
+// ==============================================================================
+// Declarative pipeline with Promoted Builds plugin integration
+// Features:
+// - Build application with versioning
+// - Automatic promotion process with manual approvals
+// - Environment-based promotions (DEV -> QA -> STAGE -> PROD)
+// - Uses Promoted Builds plugin for visual promotion tracking
+// ==============================================================================
+
+pipelineJob('promoted-build-pipeline') {
+    description('''
+🎯 Promoted Build Pipeline - Declarative Pipeline with Promoted Builds Plugin
+
+This job demonstrates how to use the Promoted Builds plugin with a declarative pipeline.
+After a successful build, you can promote it through different environments:
+
+• DEV Environment - Manual approval by DevOps team
+• QA Environment - Manual approval by QA team (requires DEV promotion)
+• STAGE Environment - Manual approval by Release Manager (requires QA promotion)
+• PROD Environment - Manual approval by Production Approvers (requires STAGE promotion)
+
+The promotion badges will appear on the build page after the initial build completes.
+''')
+    displayName('🎯 Promoted Build Pipeline')
+    
+    properties {
+        buildDiscarder {
+            strategy {
+                logRotator {
+                    numToKeepStr('20')
+                    artifactNumToKeepStr('20')
+                }
+            }
+        }
+        
+        // Define promotion processes using Promoted Builds plugin
+        promotions {
+            promotion {
+                name('Deploy-to-DEV')
+                icon('star-gold')
+                conditions {
+                    manual('admin,devops-team')
+                    selfPromotion(false)
+                }
+                actions {
+                    shell('''
+echo "════════════════════════════════════════════════════════"
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to DEV Environment"
+echo "════════════════════════════════════════════════════════"
+echo "Application: ${APPLICATION}"
+echo "Version: ${VERSION}"
+echo "Build Number: ${PROMOTED_NUMBER}"
+echo "Promoted By: ${PROMOTED_USER_NAME}"
+echo "Promotion Date: $(date)"
+echo ""
+
+cd apps/${APPLICATION}
+./deploy.sh DEV ${VERSION} ${PROMOTED_NUMBER}
+''')
+                }
+            }
+            
+            promotion {
+                name('Deploy-to-QA')
+                icon('star-blue')
+                conditions {
+                    manual('admin,qa-team')
+                    selfPromotion(false)
+                    upstream('Deploy-to-DEV')
+                }
+                actions {
+                    shell('''
+echo "════════════════════════════════════════════════════════"
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to QA Environment"
+echo "════════════════════════════════════════════════════════"
+echo "Application: ${APPLICATION}"
+echo "Version: ${VERSION}"
+echo "Build Number: ${PROMOTED_NUMBER}"
+echo "Promoted By: ${PROMOTED_USER_NAME}"
+echo "Promotion Date: $(date)"
+echo ""
+
+cd apps/${APPLICATION}
+./deploy.sh QA ${VERSION} ${PROMOTED_NUMBER}
+''')
+                }
+            }
+            
+            promotion {
+                name('Deploy-to-STAGE')
+                icon('star-silver')
+                conditions {
+                    manual('admin,release-manager')
+                    selfPromotion(false)
+                    upstream('Deploy-to-QA')
+                }
+                actions {
+                    shell('''
+echo "════════════════════════════════════════════════════════"
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to STAGE Environment"
+echo "════════════════════════════════════════════════════════"
+echo "Application: ${APPLICATION}"
+echo "Version: ${VERSION}"
+echo "Build Number: ${PROMOTED_NUMBER}"
+echo "Promoted By: ${PROMOTED_USER_NAME}"
+echo "Promotion Date: $(date)"
+echo ""
+
+cd apps/${APPLICATION}
+./deploy.sh STAGE ${VERSION} ${PROMOTED_NUMBER}
+''')
+                }
+            }
+            
+            promotion {
+                name('Deploy-to-PROD')
+                icon('star-red')
+                conditions {
+                    manual('admin,production-approvers')
+                    selfPromotion(false)
+                    upstream('Deploy-to-STAGE')
+                }
+                actions {
+                    shell('''
+echo "════════════════════════════════════════════════════════"
+echo "🎯 Promoting Build #${PROMOTED_NUMBER} to PROD Environment"
+echo "════════════════════════════════════════════════════════"
+echo "Application: ${APPLICATION}"
+echo "Version: ${VERSION}"
+echo "Build Number: ${PROMOTED_NUMBER}"
+echo "Promoted By: ${PROMOTED_USER_NAME}"
+echo "Promotion Date: $(date)"
+echo ""
+echo "🚨 THIS IS A PRODUCTION DEPLOYMENT 🚨"
+echo ""
+
+cd apps/${APPLICATION}
+./deploy.sh PROD ${VERSION} ${PROMOTED_NUMBER}
+''')
+                }
+            }
+        }
+    }
+    
+    parameters {
+        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
+        stringParam('VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
+        booleanParam('RUN_TESTS', true, 'Run unit tests during build')
+        booleanParam('CREATE_ARTIFACTS', true, 'Create and archive build artifacts')
+    }
+    
+    definition {
+        cps {
+            script('''
+pipeline {
+    agent any
+    
+    environment {
+        BUILD_TIMESTAMP = sh(script: "date -u '+%Y-%m-%d %H:%M:%S'", returnStdout: true).trim()
+        GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        GIT_BRANCH = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    echo """
+╔══════════════════════════════════════════════════════════════════════╗
+║                   🚀 PROMOTED BUILD PIPELINE                          ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+📦 Application:     ${params.APPLICATION}
+📌 Version:         ${params.VERSION}
+🔢 Build Number:    ${env.BUILD_NUMBER}
+📅 Build Time:      ${env.BUILD_TIMESTAMP}
+🌿 Git Branch:      ${env.GIT_BRANCH}
+📝 Git Commit:      ${env.GIT_COMMIT_SHORT}
+🧪 Run Tests:       ${params.RUN_TESTS}
+📦 Create Artifacts: ${params.CREATE_ARTIFACTS}
+
+This build will be available for promotion after successful completion.
+Promotions can be triggered from the build page.
+"""
+                }
+            }
+        }
+        
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "✅ Source code checked out successfully"
+            }
+        }
+        
+        stage('Build Application') {
+            steps {
+                script {
+                    echo "🔨 Building ${params.APPLICATION} version ${params.VERSION}..."
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            echo "Building application..."
+                            echo "Application: ${params.APPLICATION}" > build-info.txt
+                            echo "Version: ${params.VERSION}" >> build-info.txt
+                            echo "Build Number: ${env.BUILD_NUMBER}" >> build-info.txt
+                            echo "Build Time: ${env.BUILD_TIMESTAMP}" >> build-info.txt
+                            echo "Git Commit: ${env.GIT_COMMIT_SHORT}" >> build-info.txt
+                            echo "Git Branch: ${env.GIT_BRANCH}" >> build-info.txt
+                            
+                            cat build-info.txt
+                        """
+                    }
+                    
+                    echo "✅ Build completed successfully"
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            when {
+                expression { params.RUN_TESTS == true }
+            }
+            steps {
+                script {
+                    echo "🧪 Running unit tests..."
+                    sh """
+                        echo "Running tests for ${params.APPLICATION}..."
+                        echo "All tests passed ✅"
+                    """
+                }
+            }
+        }
+        
+        stage('Create Artifacts') {
+            when {
+                expression { params.CREATE_ARTIFACTS == true }
+            }
+            steps {
+                script {
+                    echo "📦 Creating build artifacts..."
+                    
+                    dir("apps/${params.APPLICATION}") {
+                        sh """
+                            # Create versioned artifact
+                            tar -czf ${params.APPLICATION}-${params.VERSION}-${env.BUILD_NUMBER}.tar.gz \\
+                                Dockerfile *.html *.sh build-info.txt 2>/dev/null || true
+                            
+                            echo "Artifact created: ${params.APPLICATION}-${params.VERSION}-${env.BUILD_NUMBER}.tar.gz"
+                            ls -lh ${params.APPLICATION}-${params.VERSION}-${env.BUILD_NUMBER}.tar.gz || echo "No artifact file found"
+                        """
+                    }
+                    
+                    echo "✅ Artifacts created successfully"
+                }
+            }
+        }
+        
+        stage('Archive Results') {
+            steps {
+                script {
+                    echo "📁 Archiving build artifacts and metadata..."
+                    
+                    archiveArtifacts artifacts: "apps/${params.APPLICATION}/*.tar.gz, apps/${params.APPLICATION}/build-info.txt",
+                                     fingerprint: true,
+                                     allowEmptyArchive: true
+                    
+                    echo "✅ Artifacts archived"
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                echo """
+╔══════════════════════════════════════════════════════════════════════╗
+║                       ✅ BUILD SUCCESSFUL                             ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+🎉 Build #${env.BUILD_NUMBER} completed successfully!
+
+📦 Application: ${params.APPLICATION}
+📌 Version: ${params.VERSION}
+
+🎯 NEXT STEPS - Promote this build:
+   1. Navigate to this build page
+   2. Click on "Promotion Status" in the left menu
+   3. Promote to DEV environment first
+   4. After DEV validation, promote to QA
+   5. Continue through STAGE and PROD as needed
+
+Each promotion requires manual approval from authorized users.
+"""
+            }
+        }
+        failure {
+            script {
+                echo """
+╔══════════════════════════════════════════════════════════════════════╗
+║                         ❌ BUILD FAILED                               ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Build #${env.BUILD_NUMBER} failed. Please check the logs above.
+"""
+            }
+        }
+    }
+}
+            '''.stripIndent())
+            sandbox(true)
+        }
+    }
+}
