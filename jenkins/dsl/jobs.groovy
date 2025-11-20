@@ -1221,498 +1221,498 @@ EOF
 }
 
 // Freestyle Job: API Build and Promotion Manager
-freeStyleJob('api-build-promotion-manager') {
-    description('🎯 API Build & Promotion Manager - Freestyle job to manage API builds and promote across environments with lifecycle approvals')
-    displayName('🎯 API Build & Promotion Manager')
-    
-    logRotator {
-        daysToKeep(90)
-        numToKeep(50)
-        artifactDaysToKeep(90)
-        artifactNumToKeep(50)
-    }
-    
-    parameters {
-        choiceParam('ACTION', ['BUILD_NEW', 'PROMOTE_EXISTING'], 'Action: Build new API or Promote existing build')
-        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select API application')
-        stringParam('API_VERSION', '1.0.0', 'API version (e.g., 1.0.0)')
-        stringParam('EXISTING_BUILD_NUMBER', '', 'For PROMOTE_EXISTING: Specify build number to promote (e.g., 3)')
-        choiceParam('TARGET_ENVIRONMENT', ['DEV', 'TEST', 'STAGE', 'PROD'], 'Target environment for promotion')
-        booleanParam('REQUIRE_APPROVAL', true, 'Require manual approval before deployment')
-        textParam('DEPLOYMENT_NOTES', '', 'Deployment notes and justification (required for STAGE/PROD)')
-    }
-    
-    scm {
-        git {
-            remote {
-                url('https://github.com/pkalbande/jenkins-gitops-platform.git')
-                credentials('github-token')
-            }
-            branch('*/master')
-        }
-    }
-    
-    steps {
-        shell('''#!/bin/bash
-
-echo "=========================================="
-echo "🚀 API Build & Promotion Manager"
-echo "=========================================="
-echo "Action: ${ACTION}"
-echo "Application: ${APPLICATION}"
-echo "Version: ${API_VERSION}"
-echo "Target Environment: ${TARGET_ENVIRONMENT}"
-echo "Require Approval: ${REQUIRE_APPROVAL}"
-echo "=========================================="
-
-# Debug: Show current workspace state
-echo ""
-echo "🔍 Workspace Verification:"
-echo "Current directory: $(pwd)"
-echo "Environment variables:"
-echo "WORKSPACE: ${WORKSPACE}"
-echo "GIT_COMMIT: ${GIT_COMMIT}"
-echo "GIT_BRANCH: ${GIT_BRANCH}"
-echo ""
-echo "Workspace contents:"
-ls -la
-echo ""
-
-# Check if SCM checkout happened
-if [ ! -d ".git" ]; then
-    echo "⚠️  WARNING: No .git directory found - SCM checkout may have failed"
-fi
-
-# Verify workspace has source code
-if [ ! -d "apps" ]; then
-    echo "❌ ERROR: apps directory not found in workspace"
-    echo ""
-    echo "📋 Troubleshooting Information:"
-    echo "1. SCM should have checked out code to workspace"
-    echo "2. Expected structure: apps/, jenkins/, README.md"
-    echo "3. Git URL: https://github.com/pkalbande/jenkins-gitops-platform.git"
-    echo "4. Branch: master"
-    echo ""
-    echo "Please verify:"
-    echo "- GitHub credentials are configured correctly"
-    echo "- Repository is accessible"
-    echo "- Branch 'master' exists"
-    exit 1
-fi
-
-if [ ! -d "apps/${APPLICATION}" ]; then
-    echo "❌ ERROR: Application directory apps/${APPLICATION} not found"
-    echo ""
-    echo "Available applications in apps/:"
-    ls -la apps/
-    echo ""
-    echo "Valid APPLICATION values: app1-node, app2-python"
-    exit 1
-fi
-
-echo "✅ Workspace verified: apps/${APPLICATION} exists"
-echo ""
-
-set -e
-
-# Determine the build number to use
-if [ "${ACTION}" = "BUILD_NEW" ]; then
-    EFFECTIVE_BUILD="${BUILD_NUMBER}"
-    echo "📦 Creating NEW API Build: #${EFFECTIVE_BUILD}"
-    
-    # Navigate to application directory
-    cd apps/${APPLICATION}
-    
-    # Create API build artifacts
-    echo "Creating API build artifacts..."
-    cat > api-build-${EFFECTIVE_BUILD}.json << EOF
-{
-  "api_name": "${APPLICATION}",
-  "version": "${API_VERSION}",
-  "build_number": "${EFFECTIVE_BUILD}",
-  "build_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "git_commit": "${GIT_COMMIT:-unknown}",
-  "git_branch": "${GIT_BRANCH:-master}",
-  "jenkins_build_url": "${BUILD_URL}",
-  "action": "BUILD_NEW",
-  "deployment_history": []
-}
-EOF
-    
-    echo "✅ API Build #${EFFECTIVE_BUILD} created successfully"
-    cat api-build-${EFFECTIVE_BUILD}.json
-    
-    # Return to workspace root after build creation
-    cd ../..
-    echo ""
-    echo "📂 Returned to workspace root: $(pwd)"
-    
-elif [ "${ACTION}" = "PROMOTE_EXISTING" ]; then
-    EFFECTIVE_BUILD="${EXISTING_BUILD_NUMBER}"
-    
-    if [ -z "${EFFECTIVE_BUILD}" ]; then
-        echo "❌ ERROR: EXISTING_BUILD_NUMBER is required for PROMOTE_EXISTING action"
-        exit 1
-    fi
-    
-    echo "♻️  Promoting EXISTING Build: #${EFFECTIVE_BUILD}"
-    echo "📍 From previous job run: #${EFFECTIVE_BUILD}"
-else
-    echo "❌ ERROR: Invalid ACTION: ${ACTION}"
-    exit 1
-fi
-
-echo ""
-echo "=========================================="
-echo "🎯 Deployment to ${TARGET_ENVIRONMENT}"
-echo "=========================================="
-echo "Build Number: #${EFFECTIVE_BUILD}"
-echo "API: ${APPLICATION}"
-echo "Version: ${API_VERSION}"
-
-# Check if approval is required
-if [ "${REQUIRE_APPROVAL}" = "true" ]; then
-    echo ""
-    echo "⏸️  MANUAL APPROVAL REQUIRED"
-    echo "=========================================="
-    echo "Environment: ${TARGET_ENVIRONMENT}"
-    echo "Build: #${EFFECTIVE_BUILD}"
-    echo "Notes: ${DEPLOYMENT_NOTES}"
-    echo ""
-    echo "⚠️  For STAGE/PROD deployments:"
-    echo "   - Verify all previous environment validations"
-    echo "   - Ensure lifecycle approvals obtained"
-    echo "   - Confirm rollback plan is ready"
-    echo "=========================================="
-    
-    # In a real scenario, this would pause for approval
-    # For automation, we log the approval checkpoint
-    echo "📋 Approval checkpoint logged at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-fi
-
-# Perform deployment
-echo ""
-echo "🚀 Executing Deployment..."
-
-# Navigate to application directory
-if [ ! -d "apps/${APPLICATION}" ]; then
-    echo "❌ ERROR: Application directory apps/${APPLICATION} not found in workspace"
-    exit 1
-fi
-
-cd apps/${APPLICATION}
-
-# Check if deploy script exists
-if [ ! -f "deploy.sh" ]; then
-    echo "❌ ERROR: deploy.sh not found in apps/${APPLICATION}"
-    exit 1
-fi
-
-chmod +x deploy.sh
-./deploy.sh ${TARGET_ENVIRONMENT} ${API_VERSION} ${EFFECTIVE_BUILD}
-
-# Return to workspace root
-cd ../..
-
-# Log deployment
-echo ""
-echo "=========================================="
-echo "📝 Deployment Log Entry"
-echo "=========================================="
-echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo "Action: ${ACTION}"
-echo "Build: #${EFFECTIVE_BUILD}"
-echo "API: ${APPLICATION}"
-echo "Version: ${API_VERSION}"
-echo "Environment: ${TARGET_ENVIRONMENT}"
-echo "Deployed By: ${BUILD_USER:-admin}"
-echo "Notes: ${DEPLOYMENT_NOTES}"
-echo "Build URL: ${BUILD_URL}"
-echo "=========================================="
-
-# Create deployment record in workspace root
-cat > deployment-record-${EFFECTIVE_BUILD}-${TARGET_ENVIRONMENT}.json << EOF
-{
-  "deployment_id": "${BUILD_NUMBER}",
-  "source_build": "${EFFECTIVE_BUILD}",
-  "api": "${APPLICATION}",
-  "version": "${API_VERSION}",
-  "environment": "${TARGET_ENVIRONMENT}",
-  "action": "${ACTION}",
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "deployed_by": "${BUILD_USER:-admin}",
-  "notes": "${DEPLOYMENT_NOTES}",
-  "jenkins_url": "${BUILD_URL}"
-}
-EOF
-
-echo ""
-echo "✅ Deployment Completed Successfully!"
-echo ""
-echo "=========================================="
-echo "📌 Build #${EFFECTIVE_BUILD} Status"
-echo "=========================================="
-echo "✓ Available for future promotions"
-echo "✓ Can be deployed to remaining environments"
-echo ""
-echo "💡 To deploy Build #${EFFECTIVE_BUILD} to another environment:"
-echo "   1. Set ACTION = PROMOTE_EXISTING"
-echo "   2. Set EXISTING_BUILD_NUMBER = ${EFFECTIVE_BUILD}"
-echo "   3. Select TARGET_ENVIRONMENT"
-echo "   4. Run this job again"
-echo "=========================================="
-
-# Generate HTML Deployment Dashboard
-echo ""
-echo "📊 Generating Deployment Dashboard..."
-mkdir -p deployment-reports
-
-# Collect all deployment records for this application
-cat > deployment-reports/index.html << 'HTML_EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>API Deployment Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f5f5f5;
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            margin: 0 0 10px 0;
-            font-size: 32px;
-        }
-        .header p {
-            margin: 5px 0;
-            opacity: 0.9;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .stat-card h3 {
-            margin: 0 0 10px 0;
-            color: #666;
-            font-size: 14px;
-            text-transform: uppercase;
-        }
-        .stat-card .value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        .deployment-table {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background: #667eea;
-            color: white;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-        }
-        td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-        }
-        tr:hover {
-            background-color: #f8f9fa;
-        }
-        .badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            display: inline-block;
-        }
-        .badge-dev { background: #e3f2fd; color: #1976d2; }
-        .badge-test { background: #fff3e0; color: #f57c00; }
-        .badge-stage { background: #fce4ec; color: #c2185b; }
-        .badge-prod { background: #e8f5e9; color: #388e3c; }
-        .badge-new { background: #f3e5f5; color: #7b1fa2; }
-        .badge-promote { background: #e0f2f1; color: #00695c; }
-        .action-btn {
-            background: #667eea;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 12px;
-            display: inline-block;
-            margin: 2px;
-        }
-        .action-btn:hover {
-            background: #5568d3;
-        }
-        .timestamp {
-            color: #666;
-            font-size: 13px;
-        }
-        .current-deployment {
-            background: #e8f5e9 !important;
-            border-left: 4px solid #4caf50;
-        }
-    </style>
-</head>
-<body>
-HTML_EOF
-
-# Add header with current deployment info
-cat >> deployment-reports/index.html << HTML_EOF
-    <div class="header">
-        <h1>🚀 API Deployment Dashboard</h1>
-        <p><strong>Application:</strong> ${APPLICATION}</p>
-        <p><strong>Version:</strong> ${API_VERSION}</p>
-        <p><strong>Latest Deployment:</strong> Build #${EFFECTIVE_BUILD} → ${TARGET_ENVIRONMENT}</p>
-        <p><strong>Time:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')</p>
-    </div>
-
-    <div class="stats">
-        <div class="stat-card">
-            <h3>Current Build</h3>
-            <div class="value">#${EFFECTIVE_BUILD}</div>
-        </div>
-        <div class="stat-card">
-            <h3>Environment</h3>
-            <div class="value">${TARGET_ENVIRONMENT}</div>
-        </div>
-        <div class="stat-card">
-            <h3>Action</h3>
-            <div class="value">${ACTION}</div>
-        </div>
-        <div class="stat-card">
-            <h3>Status</h3>
-            <div class="value" style="color: #4caf50;">✓ SUCCESS</div>
-        </div>
-    </div>
-
-    <div class="deployment-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>Build #</th>
-                    <th>Environment</th>
-                    <th>Action</th>
-                    <th>Version</th>
-                    <th>Timestamp</th>
-                    <th>Deployed By</th>
-                    <th>Quick Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-HTML_EOF
-
-# Add current deployment as the first row
-ENV_CLASS=$(echo "${TARGET_ENVIRONMENT}" | tr '[:upper:]' '[:lower:]')
-ACTION_CLASS=$(echo "${ACTION}" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g')
-
-cat >> deployment-reports/index.html << HTML_EOF
-                <tr class="current-deployment">
-                    <td><strong>#${EFFECTIVE_BUILD}</strong></td>
-                    <td><span class="badge badge-${ENV_CLASS}">${TARGET_ENVIRONMENT}</span></td>
-                    <td><span class="badge badge-${ACTION_CLASS}">${ACTION}</span></td>
-                    <td>${API_VERSION}</td>
-                    <td class="timestamp">$(date -u '+%Y-%m-%d %H:%M:%S')</td>
-                    <td>${BUILD_USER:-admin}</td>
-                    <td>
-                        <a href="${BUILD_URL}" class="action-btn">View Build</a>
-                    </td>
-                </tr>
-HTML_EOF
-
-# Add previous deployments from deployment records
-for record in deployment-record-*.json; do
-    if [ -f "\$record" ] && [ "\$record" != "deployment-record-${EFFECTIVE_BUILD}-${TARGET_ENVIRONMENT}.json" ]; then
-        BUILD_NUM=\$(cat "\$record" | grep -o '"source_build": "[^"]*"' | cut -d'"' -f4)
-        ENV=\$(cat "\$record" | grep -o '"environment": "[^"]*"' | cut -d'"' -f4)
-        ACT=\$(cat "\$record" | grep -o '"action": "[^"]*"' | cut -d'"' -f4)
-        VER=\$(cat "\$record" | grep -o '"version": "[^"]*"' | cut -d'"' -f4)
-        TIME=\$(cat "\$record" | grep -o '"timestamp": "[^"]*"' | cut -d'"' -f4)
-        USER=\$(cat "\$record" | grep -o '"deployed_by": "[^"]*"' | cut -d'"' -f4)
-        
-        ENV_CLASS_PREV=\$(echo "\$ENV" | tr '[:upper:]' '[:lower:]')
-        ACTION_CLASS_PREV=\$(echo "\$ACT" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g')
-        
-        cat >> deployment-reports/index.html << HTML_EOF2
-                <tr>
-                    <td>#\${BUILD_NUM}</td>
-                    <td><span class="badge badge-\${ENV_CLASS_PREV}">\${ENV}</span></td>
-                    <td><span class="badge badge-\${ACTION_CLASS_PREV}">\${ACT}</span></td>
-                    <td>\${VER}</td>
-                    <td class="timestamp">\${TIME}</td>
-                    <td>\${USER}</td>
-                    <td>
-                        <a href="#" class="action-btn" onclick="alert('To redeploy: Set EXISTING_BUILD_NUMBER=\${BUILD_NUM}, select environment, and run job')">🔄 Redeploy</a>
-                    </td>
-                </tr>
-HTML_EOF2
-    fi
-done
-
-# Close HTML
-cat >> deployment-reports/index.html << 'HTML_EOF'
-            </tbody>
-        </table>
-    </div>
-
-    <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <h3>📝 Quick Redeployment Guide</h3>
-        <ol>
-            <li>Click "Build with Parameters" on the job</li>
-            <li>Set <code>ACTION = PROMOTE_EXISTING</code></li>
-            <li>Set <code>EXISTING_BUILD_NUMBER</code> to the build you want to redeploy</li>
-            <li>Select <code>TARGET_ENVIRONMENT</code></li>
-            <li>Click "Build"</li>
-        </ol>
-    </div>
-</body>
-</html>
-HTML_EOF
-
-echo "✅ Deployment Dashboard generated: deployment-reports/index.html"
-        ''')
-    }
-    
-    publishers {
-        archiveArtifacts {
-            pattern('apps/*/api-build-*.json, deployment-record-*.json, deployment-reports/*.html')
-            fingerprint(true)
-            allowEmpty(true)
-        }
-        
-        publishHtml {
-            reportName('Deployment Dashboard')
-            reportDir('deployment-reports')
-            reportFiles('index.html')
-            reportTitles('API Deployment Dashboard')
-            allowMissing(false)
-            alwaysLinkToLastBuild(true)
-            keepAll(true)
-        }
-    }
-}
+//freeStyleJob('api-build-promotion-manager') {
+//    description('🎯 API Build & Promotion Manager - Freestyle job to manage API builds and promote across environments with lifecycle approvals')
+//    displayName('🎯 API Build & Promotion Manager')
+//    
+//    logRotator {
+//        daysToKeep(90)
+//        numToKeep(50)
+//        artifactDaysToKeep(90)
+//        artifactNumToKeep(50)
+//    }
+//    
+//    parameters {
+//        choiceParam('ACTION', ['BUILD_NEW', 'PROMOTE_EXISTING'], 'Action: Build new API or Promote existing build')
+//        choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select API application')
+//        stringParam('API_VERSION', '1.0.0', 'API version (e.g., 1.0.0)')
+//        stringParam('EXISTING_BUILD_NUMBER', '', 'For PROMOTE_EXISTING: Specify build number to promote (e.g., 3)')
+//        choiceParam('TARGET_ENVIRONMENT', ['DEV', 'TEST', 'STAGE', 'PROD'], 'Target environment for promotion')
+//        booleanParam('REQUIRE_APPROVAL', true, 'Require manual approval before deployment')
+//        textParam('DEPLOYMENT_NOTES', '', 'Deployment notes and justification (required for STAGE/PROD)')
+//    }
+//    
+//    scm {
+//        git {
+//            remote {
+//                url('https://github.com/pkalbande/jenkins-gitops-platform.git')
+//                credentials('github-token')
+//            }
+//            branch('*/master')
+//        }
+//    }
+//    
+//    steps {
+//        shell('''#!/bin/bash
+//
+//echo "=========================================="
+//echo "🚀 API Build & Promotion Manager"
+//echo "=========================================="
+//echo "Action: ${ACTION}"
+//echo "Application: ${APPLICATION}"
+//echo "Version: ${API_VERSION}"
+//echo "Target Environment: ${TARGET_ENVIRONMENT}"
+//echo "Require Approval: ${REQUIRE_APPROVAL}"
+//echo "=========================================="
+//
+//# Debug: Show current workspace state
+//echo ""
+//echo "🔍 Workspace Verification:"
+//echo "Current directory: $(pwd)"
+//echo "Environment variables:"
+//echo "WORKSPACE: ${WORKSPACE}"
+//echo "GIT_COMMIT: ${GIT_COMMIT}"
+//echo "GIT_BRANCH: ${GIT_BRANCH}"
+//echo ""
+//echo "Workspace contents:"
+//ls -la
+//echo ""
+//
+//# Check if SCM checkout happened
+//if [ ! -d ".git" ]; then
+//    echo "⚠️  WARNING: No .git directory found - SCM checkout may have failed"
+//fi
+//
+//# Verify workspace has source code
+//if [ ! -d "apps" ]; then
+//    echo "❌ ERROR: apps directory not found in workspace"
+//    echo ""
+//    echo "📋 Troubleshooting Information:"
+//    echo "1. SCM should have checked out code to workspace"
+//    echo "2. Expected structure: apps/, jenkins/, README.md"
+//    echo "3. Git URL: https://github.com/pkalbande/jenkins-gitops-platform.git"
+//    echo "4. Branch: master"
+//    echo ""
+//    echo "Please verify:"
+//    echo "- GitHub credentials are configured correctly"
+//    echo "- Repository is accessible"
+//    echo "- Branch 'master' exists"
+//    exit 1
+//fi
+//
+//if [ ! -d "apps/${APPLICATION}" ]; then
+//    echo "❌ ERROR: Application directory apps/${APPLICATION} not found"
+//    echo ""
+//    echo "Available applications in apps/:"
+//    ls -la apps/
+//    echo ""
+//    echo "Valid APPLICATION values: app1-node, app2-python"
+//    exit 1
+//fi
+//
+//echo "✅ Workspace verified: apps/${APPLICATION} exists"
+//echo ""
+//
+//set -e
+//
+//# Determine the build number to use
+//if [ "${ACTION}" = "BUILD_NEW" ]; then
+//    EFFECTIVE_BUILD="${BUILD_NUMBER}"
+//    echo "📦 Creating NEW API Build: #${EFFECTIVE_BUILD}"
+//    
+//    # Navigate to application directory
+//    cd apps/${APPLICATION}
+//    
+//    # Create API build artifacts
+//    echo "Creating API build artifacts..."
+//    cat > api-build-${EFFECTIVE_BUILD}.json << EOF
+//{
+//  "api_name": "${APPLICATION}",
+//  "version": "${API_VERSION}",
+//  "build_number": "${EFFECTIVE_BUILD}",
+//  "build_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+//  "git_commit": "${GIT_COMMIT:-unknown}",
+//  "git_branch": "${GIT_BRANCH:-master}",
+//  "jenkins_build_url": "${BUILD_URL}",
+//  "action": "BUILD_NEW",
+//  "deployment_history": []
+//}
+//EOF
+//    
+//    echo "✅ API Build #${EFFECTIVE_BUILD} created successfully"
+//    cat api-build-${EFFECTIVE_BUILD}.json
+//    
+//    # Return to workspace root after build creation
+//    cd ../..
+//    echo ""
+//    echo "📂 Returned to workspace root: $(pwd)"
+//    
+//elif [ "${ACTION}" = "PROMOTE_EXISTING" ]; then
+//    EFFECTIVE_BUILD="${EXISTING_BUILD_NUMBER}"
+//    
+//    if [ -z "${EFFECTIVE_BUILD}" ]; then
+//        echo "❌ ERROR: EXISTING_BUILD_NUMBER is required for PROMOTE_EXISTING action"
+//        exit 1
+//    fi
+//    
+//    echo "♻️  Promoting EXISTING Build: #${EFFECTIVE_BUILD}"
+//    echo "📍 From previous job run: #${EFFECTIVE_BUILD}"
+//else
+//    echo "❌ ERROR: Invalid ACTION: ${ACTION}"
+//    exit 1
+//fi
+//
+//echo ""
+//echo "=========================================="
+//echo "🎯 Deployment to ${TARGET_ENVIRONMENT}"
+//echo "=========================================="
+//echo "Build Number: #${EFFECTIVE_BUILD}"
+//echo "API: ${APPLICATION}"
+//echo "Version: ${API_VERSION}"
+//
+//# Check if approval is required
+//if [ "${REQUIRE_APPROVAL}" = "true" ]; then
+//    echo ""
+//    echo "⏸️  MANUAL APPROVAL REQUIRED"
+//    echo "=========================================="
+//    echo "Environment: ${TARGET_ENVIRONMENT}"
+//    echo "Build: #${EFFECTIVE_BUILD}"
+//    echo "Notes: ${DEPLOYMENT_NOTES}"
+//    echo ""
+//    echo "⚠️  For STAGE/PROD deployments:"
+//    echo "   - Verify all previous environment validations"
+//    echo "   - Ensure lifecycle approvals obtained"
+//    echo "   - Confirm rollback plan is ready"
+//    echo "=========================================="
+//    
+//    # In a real scenario, this would pause for approval
+//    # For automation, we log the approval checkpoint
+//    echo "📋 Approval checkpoint logged at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+//fi
+//
+//# Perform deployment
+//echo ""
+//echo "🚀 Executing Deployment..."
+//
+//# Navigate to application directory
+//if [ ! -d "apps/${APPLICATION}" ]; then
+//    echo "❌ ERROR: Application directory apps/${APPLICATION} not found in workspace"
+//    exit 1
+//fi
+//
+//cd apps/${APPLICATION}
+//
+//# Check if deploy script exists
+//if [ ! -f "deploy.sh" ]; then
+//    echo "❌ ERROR: deploy.sh not found in apps/${APPLICATION}"
+//    exit 1
+//fi
+//
+//chmod +x deploy.sh
+//./deploy.sh ${TARGET_ENVIRONMENT} ${API_VERSION} ${EFFECTIVE_BUILD}
+//
+//# Return to workspace root
+//cd ../..
+//
+//# Log deployment
+//echo ""
+//echo "=========================================="
+//echo "📝 Deployment Log Entry"
+//echo "=========================================="
+//echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+//echo "Action: ${ACTION}"
+//echo "Build: #${EFFECTIVE_BUILD}"
+//echo "API: ${APPLICATION}"
+//echo "Version: ${API_VERSION}"
+//echo "Environment: ${TARGET_ENVIRONMENT}"
+//echo "Deployed By: ${BUILD_USER:-admin}"
+//echo "Notes: ${DEPLOYMENT_NOTES}"
+//echo "Build URL: ${BUILD_URL}"
+//echo "=========================================="
+//
+//# Create deployment record in workspace root
+//cat > deployment-record-${EFFECTIVE_BUILD}-${TARGET_ENVIRONMENT}.json << EOF
+//{
+//  "deployment_id": "${BUILD_NUMBER}",
+//  "source_build": "${EFFECTIVE_BUILD}",
+//  "api": "${APPLICATION}",
+//  "version": "${API_VERSION}",
+//  "environment": "${TARGET_ENVIRONMENT}",
+//  "action": "${ACTION}",
+//  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+//  "deployed_by": "${BUILD_USER:-admin}",
+//  "notes": "${DEPLOYMENT_NOTES}",
+//  "jenkins_url": "${BUILD_URL}"
+//}
+//EOF
+//
+//echo ""
+//echo "✅ Deployment Completed Successfully!"
+//echo ""
+//echo "=========================================="
+//echo "📌 Build #${EFFECTIVE_BUILD} Status"
+//echo "=========================================="
+//echo "✓ Available for future promotions"
+//echo "✓ Can be deployed to remaining environments"
+//echo ""
+//echo "💡 To deploy Build #${EFFECTIVE_BUILD} to another environment:"
+//echo "   1. Set ACTION = PROMOTE_EXISTING"
+//echo "   2. Set EXISTING_BUILD_NUMBER = ${EFFECTIVE_BUILD}"
+//echo "   3. Select TARGET_ENVIRONMENT"
+//echo "   4. Run this job again"
+//echo "=========================================="
+//
+//# Generate HTML Deployment Dashboard
+//echo ""
+//echo "📊 Generating Deployment Dashboard..."
+//mkdir -p deployment-reports
+//
+//# Collect all deployment records for this application
+//cat > deployment-reports/index.html << 'HTML_EOF'
+//<!DOCTYPE html>
+//<html>
+//<head>
+//    <title>API Deployment Dashboard</title>
+//    <style>
+//        body {
+//            font-family: Arial, sans-serif;
+//            margin: 20px;
+//            background-color: #f5f5f5;
+//        }
+//        .header {
+//            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+//            color: white;
+//            padding: 30px;
+//            border-radius: 10px;
+//            margin-bottom: 30px;
+//            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+//        }
+//        .header h1 {
+//            margin: 0 0 10px 0;
+//            font-size: 32px;
+//        }
+//        .header p {
+//            margin: 5px 0;
+//            opacity: 0.9;
+//        }
+//        .stats {
+//            display: grid;
+//            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+//            gap: 20px;
+//            margin-bottom: 30px;
+//        }
+//        .stat-card {
+//            background: white;
+//            padding: 20px;
+//            border-radius: 8px;
+//            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+//            text-align: center;
+//        }
+//        .stat-card h3 {
+//            margin: 0 0 10px 0;
+//            color: #666;
+//            font-size: 14px;
+//            text-transform: uppercase;
+//        }
+//        .stat-card .value {
+//            font-size: 28px;
+//            font-weight: bold;
+//            color: #667eea;
+//        }
+//        .deployment-table {
+//            background: white;
+//            border-radius: 8px;
+//            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+//            overflow: hidden;
+//        }
+//        table {
+//            width: 100%;
+//            border-collapse: collapse;
+//        }
+//        th {
+//            background: #667eea;
+//            color: white;
+//            padding: 15px;
+//            text-align: left;
+//            font-weight: 600;
+//        }
+//        td {
+//            padding: 12px 15px;
+//            border-bottom: 1px solid #eee;
+//        }
+//        tr:hover {
+//            background-color: #f8f9fa;
+//        }
+//        .badge {
+//            padding: 5px 12px;
+//            border-radius: 20px;
+//            font-size: 12px;
+//            font-weight: bold;
+//            display: inline-block;
+//        }
+//        .badge-dev { background: #e3f2fd; color: #1976d2; }
+//        .badge-test { background: #fff3e0; color: #f57c00; }
+//        .badge-stage { background: #fce4ec; color: #c2185b; }
+//        .badge-prod { background: #e8f5e9; color: #388e3c; }
+//        .badge-new { background: #f3e5f5; color: #7b1fa2; }
+//        .badge-promote { background: #e0f2f1; color: #00695c; }
+//        .action-btn {
+//            background: #667eea;
+//            color: white;
+//            padding: 6px 12px;
+//            border-radius: 4px;
+//            text-decoration: none;
+//            font-size: 12px;
+//            display: inline-block;
+//            margin: 2px;
+//        }
+//        .action-btn:hover {
+//            background: #5568d3;
+//        }
+//        .timestamp {
+//            color: #666;
+//            font-size: 13px;
+//        }
+//        .current-deployment {
+//            background: #e8f5e9 !important;
+//            border-left: 4px solid #4caf50;
+//        }
+//    </style>
+//</head>
+//<body>
+//HTML_EOF
+//
+//# Add header with current deployment info
+//cat >> deployment-reports/index.html << HTML_EOF
+//    <div class="header">
+//        <h1>🚀 API Deployment Dashboard</h1>
+//        <p><strong>Application:</strong> ${APPLICATION}</p>
+//        <p><strong>Version:</strong> ${API_VERSION}</p>
+//        <p><strong>Latest Deployment:</strong> Build #${EFFECTIVE_BUILD} → ${TARGET_ENVIRONMENT}</p>
+//        <p><strong>Time:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')</p>
+//    </div>
+//
+//    <div class="stats">
+//        <div class="stat-card">
+//            <h3>Current Build</h3>
+//            <div class="value">#${EFFECTIVE_BUILD}</div>
+//        </div>
+//        <div class="stat-card">
+//            <h3>Environment</h3>
+//            <div class="value">${TARGET_ENVIRONMENT}</div>
+//        </div>
+//        <div class="stat-card">
+//            <h3>Action</h3>
+//            <div class="value">${ACTION}</div>
+//        </div>
+//        <div class="stat-card">
+//            <h3>Status</h3>
+//            <div class="value" style="color: #4caf50;">✓ SUCCESS</div>
+//        </div>
+//    </div>
+//
+//    <div class="deployment-table">
+//        <table>
+//            <thead>
+//                <tr>
+//                    <th>Build #</th>
+//                    <th>Environment</th>
+//                    <th>Action</th>
+//                    <th>Version</th>
+//                    <th>Timestamp</th>
+//                    <th>Deployed By</th>
+//                    <th>Quick Actions</th>
+//                </tr>
+//            </thead>
+//            <tbody>
+//HTML_EOF
+//
+//# Add current deployment as the first row
+//ENV_CLASS=$(echo "${TARGET_ENVIRONMENT}" | tr '[:upper:]' '[:lower:]')
+//ACTION_CLASS=$(echo "${ACTION}" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g')
+//
+//cat >> deployment-reports/index.html << HTML_EOF
+//                <tr class="current-deployment">
+//                    <td><strong>#${EFFECTIVE_BUILD}</strong></td>
+//                    <td><span class="badge badge-${ENV_CLASS}">${TARGET_ENVIRONMENT}</span></td>
+//                    <td><span class="badge badge-${ACTION_CLASS}">${ACTION}</span></td>
+//                    <td>${API_VERSION}</td>
+//                    <td class="timestamp">$(date -u '+%Y-%m-%d %H:%M:%S')</td>
+//                    <td>${BUILD_USER:-admin}</td>
+//                    <td>
+//                        <a href="${BUILD_URL}" class="action-btn">View Build</a>
+//                    </td>
+//                </tr>
+//HTML_EOF
+//
+//# Add previous deployments from deployment records
+//for record in deployment-record-*.json; do
+//    if [ -f "\$record" ] && [ "\$record" != "deployment-record-${EFFECTIVE_BUILD}-${TARGET_ENVIRONMENT}.json" ]; then
+//        BUILD_NUM=\$(cat "\$record" | grep -o '"source_build": "[^"]*"' | cut -d'"' -f4)
+//        ENV=\$(cat "\$record" | grep -o '"environment": "[^"]*"' | cut -d'"' -f4)
+//        ACT=\$(cat "\$record" | grep -o '"action": "[^"]*"' | cut -d'"' -f4)
+//        VER=\$(cat "\$record" | grep -o '"version": "[^"]*"' | cut -d'"' -f4)
+//        TIME=\$(cat "\$record" | grep -o '"timestamp": "[^"]*"' | cut -d'"' -f4)
+//        USER=\$(cat "\$record" | grep -o '"deployed_by": "[^"]*"' | cut -d'"' -f4)
+//        
+//        ENV_CLASS_PREV=\$(echo "\$ENV" | tr '[:upper:]' '[:lower:]')
+//        ACTION_CLASS_PREV=\$(echo "\$ACT" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g')
+//        
+//        cat >> deployment-reports/index.html << HTML_EOF2
+//                <tr>
+//                    <td>#\${BUILD_NUM}</td>
+//                    <td><span class="badge badge-\${ENV_CLASS_PREV}">\${ENV}</span></td>
+//                    <td><span class="badge badge-\${ACTION_CLASS_PREV}">\${ACT}</span></td>
+//                    <td>\${VER}</td>
+//                    <td class="timestamp">\${TIME}</td>
+//                    <td>\${USER}</td>
+//                    <td>
+//                        <a href="#" class="action-btn" onclick="alert('To redeploy: Set EXISTING_BUILD_NUMBER=\${BUILD_NUM}, select environment, and run job')">🔄 Redeploy</a>
+//                    </td>
+//                </tr>
+//HTML_EOF2
+//    fi
+//done
+//
+//# Close HTML
+//cat >> deployment-reports/index.html << 'HTML_EOF'
+//            </tbody>
+//        </table>
+//    </div>
+//
+//    <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+//        <h3>📝 Quick Redeployment Guide</h3>
+//        <ol>
+//            <li>Click "Build with Parameters" on the job</li>
+//            <li>Set <code>ACTION = PROMOTE_EXISTING</code></li>
+//            <li>Set <code>EXISTING_BUILD_NUMBER</code> to the build you want to redeploy</li>
+//            <li>Select <code>TARGET_ENVIRONMENT</code></li>
+//            <li>Click "Build"</li>
+//        </ol>
+//    </div>
+//</body>
+//</html>
+//HTML_EOF
+//
+//echo "✅ Deployment Dashboard generated: deployment-reports/index.html"
+//        ''')
+//    }
+//    
+//    publishers {
+//        archiveArtifacts {
+//            pattern('apps/*/api-build-*.json, deployment-record-*.json, deployment-reports/*.html')
+//            fingerprint(true)
+//            allowEmpty(true)
+//        }
+//        
+//        publishHtml {
+//            reportName('Deployment Dashboard')
+//            reportDir('deployment-reports')
+//            reportFiles('index.html')
+//            reportTitles('API Deployment Dashboard')
+//            allowMissing(false)
+//            alwaysLinkToLastBuild(true)
+//            keepAll(true)
+//        }
+//    }
+//}
