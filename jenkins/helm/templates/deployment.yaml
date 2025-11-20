@@ -69,7 +69,7 @@ spec:
             - name: DOCKER_HOST
               value: tcp://localhost:2375
             - name: PATH
-              value: /var/jenkins_home/docker-cli:/usr/local/openjdk-17/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+              value: /var/jenkins_home/docker-cli:/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           envFrom:
             - secretRef:
                 name: jenkins-secrets
