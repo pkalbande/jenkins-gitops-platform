@@ -1589,7 +1589,7 @@ cat >> deployment-reports/index.html << HTML_EOF
         <p><strong>Application:</strong> ${APPLICATION}</p>
         <p><strong>Version:</strong> ${API_VERSION}</p>
         <p><strong>Latest Deployment:</strong> Build #${EFFECTIVE_BUILD} → ${TARGET_ENVIRONMENT}</p>
-        <p><strong>Time:</strong> $(date -u +%Y-%m-%d\ %H:%M:%S\ UTC)</p>
+        <p><strong>Time:</strong> $(date -u '+%Y-%m-%d %H:%M:%S UTC')</p>
     </div>
 
     <div class="stats">
@@ -1637,7 +1637,7 @@ cat >> deployment-reports/index.html << HTML_EOF
                     <td><span class="badge badge-${ENV_CLASS}">${TARGET_ENVIRONMENT}</span></td>
                     <td><span class="badge badge-${ACTION_CLASS}">${ACTION}</span></td>
                     <td>${API_VERSION}</td>
-                    <td class="timestamp">$(date -u +%Y-%m-%d\ %H:%M:%S)</td>
+                    <td class="timestamp">$(date -u '+%Y-%m-%d %H:%M:%S')</td>
                     <td>${BUILD_USER:-admin}</td>
                     <td>
                         <a href="${BUILD_URL}" class="action-btn">View Build</a>
