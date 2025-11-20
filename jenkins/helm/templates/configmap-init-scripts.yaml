@@ -39,8 +39,8 @@ data:
     <javaposse.jobdsl.plugin.ExecuteDslScripts>
       <scriptText><![CDATA[
 pipelineJob('release-build-job') {
-    description('🚀 Release Build Job - Build code, create versioned release, and archive artifacts using Release Plugin')
-    displayName('🚀 Release Build Job')
+    description('Release Build Job - Build code, create versioned release, and archive artifacts using Release Plugin')
+    displayName('Release Build Job')
     
     properties {
         buildDiscarder {
@@ -78,8 +78,8 @@ pipelineJob('release-build-job') {
 }
 
 pipelineJob('promotion-orchestrator-job') {
-    description('🎯 Promotion Orchestrator Job - Select and promote previous builds across environments (DEV -> QA -> STAGE -> PROD)')
-    displayName('🎯 Promotion Orchestrator Job')
+    description('Promotion Orchestrator Job - Select and promote previous builds across environments (DEV -> QA -> STAGE -> PROD)')
+    displayName('Promotion Orchestrator Job')
     
     properties {
         buildDiscarder {
