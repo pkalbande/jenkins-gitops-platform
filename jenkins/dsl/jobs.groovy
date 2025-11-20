@@ -1465,28 +1465,5 @@ echo "=========================================="
             fingerprint(true)
             allowEmpty(true)
         }
-        
-        extendedEmail {
-            recipientList('devops-team@example.com')
-            defaultSubject('API Deployment: ${APPLICATION} v${API_VERSION} to ${TARGET_ENVIRONMENT}')
-            defaultContent('''Build: #${EFFECTIVE_BUILD}
-Environment: ${TARGET_ENVIRONMENT}
-Status: ${BUILD_STATUS}
-Action: ${ACTION}
-
-Deployment Notes:
-${DEPLOYMENT_NOTES}
-
-Build URL: ${BUILD_URL}
-''')
-            triggers {
-                always {
-                    sendTo {
-                        developers()
-                        recipientList()
-                    }
-                }
-            }
-        }
     }
 }
