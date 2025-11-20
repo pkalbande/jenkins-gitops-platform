@@ -1266,14 +1266,31 @@ echo "Target Environment: ${TARGET_ENVIRONMENT}"
 echo "Require Approval: ${REQUIRE_APPROVAL}"
 echo "=========================================="
 
+# Debug: Show current workspace state
+echo ""
+echo "🔍 Workspace Verification:"
+echo "Current directory: $(pwd)"
+echo "Workspace contents:"
+ls -la
+echo ""
+
 # Verify workspace has source code
-if [ ! -d "apps/${APPLICATION}" ]; then
-    echo "❌ ERROR: Application directory apps/${APPLICATION} not found"
-    echo "Current directory: $(pwd)"
-    echo "Contents:"
-    ls -la
+if [ ! -d "apps" ]; then
+    echo "❌ ERROR: apps directory not found in workspace"
+    echo "This usually means SCM checkout failed or is incomplete"
+    echo "Workspace root should contain: apps/, jenkins/, README.md"
     exit 1
 fi
+
+if [ ! -d "apps/${APPLICATION}" ]; then
+    echo "❌ ERROR: Application directory apps/${APPLICATION} not found"
+    echo "Available applications:"
+    ls -la apps/
+    exit 1
+fi
+
+echo "✅ Workspace verified: apps/${APPLICATION} exists"
+echo ""
 
 # Determine the build number to use
 if [ "${ACTION}" = "BUILD_NEW" ]; then
