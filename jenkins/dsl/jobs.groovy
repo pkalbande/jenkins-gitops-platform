@@ -1254,7 +1254,6 @@ freeStyleJob('api-build-promotion-manager') {
     
     steps {
         shell('''#!/bin/bash
-set -e
 
 echo "=========================================="
 echo "🚀 API Build & Promotion Manager"
@@ -1270,27 +1269,51 @@ echo "=========================================="
 echo ""
 echo "🔍 Workspace Verification:"
 echo "Current directory: $(pwd)"
+echo "Environment variables:"
+echo "WORKSPACE: ${WORKSPACE}"
+echo "GIT_COMMIT: ${GIT_COMMIT}"
+echo "GIT_BRANCH: ${GIT_BRANCH}"
+echo ""
 echo "Workspace contents:"
 ls -la
 echo ""
 
+# Check if SCM checkout happened
+if [ ! -d ".git" ]; then
+    echo "⚠️  WARNING: No .git directory found - SCM checkout may have failed"
+fi
+
 # Verify workspace has source code
 if [ ! -d "apps" ]; then
     echo "❌ ERROR: apps directory not found in workspace"
-    echo "This usually means SCM checkout failed or is incomplete"
-    echo "Workspace root should contain: apps/, jenkins/, README.md"
+    echo ""
+    echo "📋 Troubleshooting Information:"
+    echo "1. SCM should have checked out code to workspace"
+    echo "2. Expected structure: apps/, jenkins/, README.md"
+    echo "3. Git URL: https://github.com/pkalbande/jenkins-gitops-platform.git"
+    echo "4. Branch: master"
+    echo ""
+    echo "Please verify:"
+    echo "- GitHub credentials are configured correctly"
+    echo "- Repository is accessible"
+    echo "- Branch 'master' exists"
     exit 1
 fi
 
 if [ ! -d "apps/${APPLICATION}" ]; then
     echo "❌ ERROR: Application directory apps/${APPLICATION} not found"
-    echo "Available applications:"
+    echo ""
+    echo "Available applications in apps/:"
     ls -la apps/
+    echo ""
+    echo "Valid APPLICATION values: app1-node, app2-python"
     exit 1
 fi
 
 echo "✅ Workspace verified: apps/${APPLICATION} exists"
 echo ""
+
+set -e
 
 # Determine the build number to use
 if [ "${ACTION}" = "BUILD_NEW" ]; then
