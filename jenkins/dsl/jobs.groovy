@@ -1976,14 +1976,355 @@ echo "   5. Continue through STAGE and PROD as needed"
 echo ""
 echo "Each promotion requires manual approval from authorized users."
 echo ""
+
+# Create Build Status Dashboard
+echo "📊 Creating Build Status Dashboard..."
+mkdir -p build-dashboard
+
+cat > build-dashboard/index.html << 'HTML_EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Build Status Dashboard</title>
+    <meta http-equiv="refresh" content="30">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            color: #667eea;
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        .header .subtitle {
+            color: #666;
+            font-size: 16px;
+        }
+        .build-info {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        .build-info h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .info-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .info-item .label {
+            font-weight: bold;
+            color: #555;
+            margin-right: 10px;
+        }
+        .info-item .value {
+            color: #333;
+        }
+        .promotion-status {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .promotion-status h2 {
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 24px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .promotion-pipeline {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .stage {
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+            position: relative;
+        }
+        .stage-box {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 25px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .stage-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+        .stage-box.promoted {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            border: 3px solid #28a745;
+        }
+        .stage-box.pending {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border: 3px solid #ffc107;
+        }
+        .stage-box.not-promoted {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border: 3px solid #6c757d;
+        }
+        .stage-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        .stage-name {
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .stage-status {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .stage-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .badge-success {
+            background: #28a745;
+            color: white;
+        }
+        .badge-warning {
+            background: #ffc107;
+            color: #333;
+        }
+        .badge-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .arrow {
+            font-size: 30px;
+            color: #667eea;
+            align-self: center;
+        }
+        .instructions {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .instructions h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+        .instructions ol {
+            margin-left: 20px;
+            color: #856404;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+        .refresh-note {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Promoted Build Status Dashboard</h1>
+            <p class="subtitle">Real-time view of build promotions across environments</p>
+        </div>
+        
+        <div class="build-info">
+            <h2>📦 Build Information</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="label">Build #:</span>
+                    <span class="value">BUILD_NUMBER_PLACEHOLDER</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Application:</span>
+                    <span class="value">APPLICATION_PLACEHOLDER</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Version:</span>
+                    <span class="value">VERSION_PLACEHOLDER</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Build Time:</span>
+                    <span class="value">BUILD_TIME_PLACEHOLDER</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Git Commit:</span>
+                    <span class="value">GIT_COMMIT_PLACEHOLDER</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Git Branch:</span>
+                    <span class="value">GIT_BRANCH_PLACEHOLDER</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="promotion-status">
+            <h2>🚀 Promotion Pipeline Status</h2>
+            <div class="promotion-pipeline">
+                <div class="stage">
+                    <div class="stage-box pending">
+                        <div class="stage-icon">⭐</div>
+                        <div class="stage-name">BUILD</div>
+                        <div class="stage-status">Just Completed</div>
+                        <span class="stage-badge badge-success">✓ SUCCESS</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="stage">
+                    <div class="stage-box not-promoted" id="dev-stage">
+                        <div class="stage-icon">🟡</div>
+                        <div class="stage-name">DEV</div>
+                        <div class="stage-status">Awaiting Promotion</div>
+                        <span class="stage-badge badge-warning">PENDING</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="stage">
+                    <div class="stage-box not-promoted" id="qa-stage">
+                        <div class="stage-icon">🔵</div>
+                        <div class="stage-name">QA</div>
+                        <div class="stage-status">Requires DEV</div>
+                        <span class="stage-badge badge-secondary">NOT STARTED</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="stage">
+                    <div class="stage-box not-promoted" id="stage-stage">
+                        <div class="stage-icon">⚪</div>
+                        <div class="stage-name">STAGE</div>
+                        <div class="stage-status">Requires QA</div>
+                        <span class="stage-badge badge-secondary">NOT STARTED</span>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="stage">
+                    <div class="stage-box not-promoted" id="prod-stage">
+                        <div class="stage-icon">🔴</div>
+                        <div class="stage-name">PROD</div>
+                        <div class="stage-status">Requires STAGE</div>
+                        <span class="stage-badge badge-secondary">NOT STARTED</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>📋 How to Promote This Build:</h3>
+                <ol>
+                    <li>Navigate to the build page (click on Build #BUILD_NUMBER_PLACEHOLDER)</li>
+                    <li>Look for "Promotion Status" in the left sidebar</li>
+                    <li>Click on the promotion badge you want to trigger (e.g., Deploy-to-DEV)</li>
+                    <li>Approve the promotion if you have the required permissions</li>
+                    <li>After successful promotion, the dashboard will update automatically</li>
+                </ol>
+            </div>
+        </div>
+        
+        <p class="refresh-note">⟳ This page auto-refreshes every 30 seconds</p>
+    </div>
+</body>
+</html>
+HTML_EOF
+
+# Replace placeholders with actual values
+sed -i.bak "s/BUILD_NUMBER_PLACEHOLDER/${BUILD_NUMBER}/g" build-dashboard/index.html
+sed -i.bak "s/APPLICATION_PLACEHOLDER/${APPLICATION}/g" build-dashboard/index.html
+sed -i.bak "s/VERSION_PLACEHOLDER/${VERSION}/g" build-dashboard/index.html
+sed -i.bak "s/BUILD_TIME_PLACEHOLDER/$(date -u '+%Y-%m-%d %H:%M:%S UTC')/g" build-dashboard/index.html
+sed -i.bak "s/GIT_COMMIT_PLACEHOLDER/$(git rev-parse --short HEAD)/g" build-dashboard/index.html
+sed -i.bak "s/GIT_BRANCH_PLACEHOLDER/$(git rev-parse --abbrev-ref HEAD)/g" build-dashboard/index.html
+rm -f build-dashboard/index.html.bak
+
+echo "✅ Build Status Dashboard created at build-dashboard/index.html"
+
+# Set build description with clickable link
+echo "Setting build description..."
+echo "<h3>📦 Build: ${APPLICATION} v${VERSION}</h3><p>🎯 <a href='../promoted-build-job/${BUILD_NUMBER}/Build_Status_Dashboard/'>View Build Status Dashboard</a></p>" > build-description.txt
+        ''')
+        
+        systemGroovyCommand('''
+            def build = Thread.currentThread().executable
+            def descFile = new File(build.workspace.toString() + "/build-description.txt")
+            if (descFile.exists()) {
+                build.setDescription(descFile.text)
+            }
         ''')
     }
     
     publishers {
         archiveArtifacts {
-            pattern('apps/*/build-info.txt, apps/*/*.tar.gz')
+            pattern('apps/*/build-info.txt, apps/*/*.tar.gz, build-dashboard/*.html')
             fingerprint(true)
             allowEmpty(true)
+        }
+        
+        publishHtml {
+            reportName('Build Status Dashboard')
+            reportDir('build-dashboard')
+            reportFiles('index.html')
+            reportTitles('Build Status Dashboard')
+            allowMissing(false)
+            alwaysLinkToLastBuild(true)
+            keepAll(true)
         }
     }
 }
