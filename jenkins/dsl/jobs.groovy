@@ -701,8 +701,8 @@ pipeline {
 
 // Pipeline Job 2: Selective Promotion Pipeline
 pipelineJob('selective-promotion-pipeline-v2') {
-    description('🎯 Selective Promotion Pipeline - Manually select environment to deploy a specific build')
-    displayName('🎯 Selective Promotion Pipeline')
+    description('🎯 Selective Promotion Pipeline v2 - Manually select environment to deploy a specific build')
+    displayName('🎯 Selective Promotion Pipeline-v2')
     
     logRotator {
         daysToKeep(60)
