@@ -297,9 +297,9 @@ echo "=========================================="
     }
 }
 
-// Pipeline Job 1: Release Pipeline with Manual Approvals
+// Pipeline Job 1: Release Pipeline with Flexible Deployment
 pipelineJob('release-pipeline-job') {
-    description('🚀 Release Pipeline - Declarative pipeline with manual approval for TEST, STAGE, and PROD deployments')
+    description('🚀 Release Pipeline - Flexible deployment: skip any environment and deploy to any other environment independently. Supports build reuse across environments.')
     displayName('🚀 Release Pipeline')
     
     logRotator {
@@ -312,7 +312,11 @@ pipelineJob('release-pipeline-job') {
     parameters {
         choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
         stringParam('RELEASE_VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
-        booleanParam('SKIP_TESTS', false, 'Skip test execution')
+        stringParam('USE_BUILD_NUMBER', '', 'Optional: Use existing build number (leave empty for new build)')
+        booleanParam('DEPLOY_TO_DEV', true, 'Deploy to DEV environment (can skip)')
+        booleanParam('DEPLOY_TO_TEST', false, 'Deploy to TEST environment (can skip)')
+        booleanParam('DEPLOY_TO_STAGE', false, 'Deploy to STAGE environment (can skip)')
+        booleanParam('DEPLOY_TO_PROD', false, 'Deploy to PROD environment (can skip)')
     }
     
     definition {
@@ -324,13 +328,18 @@ pipeline {
     parameters {
         choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to build')
         string(name: 'RELEASE_VERSION', defaultValue: '1.0.0', description: 'Version number for the release')
-        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip test execution')
+        string(name: 'USE_BUILD_NUMBER', defaultValue: '', description: 'Optional: Use existing build number (leave empty for new build)')
+        booleanParam(name: 'DEPLOY_TO_DEV', defaultValue: true, description: 'Deploy to DEV environment')
+        booleanParam(name: 'DEPLOY_TO_TEST', defaultValue: false, description: 'Deploy to TEST environment')
+        booleanParam(name: 'DEPLOY_TO_STAGE', defaultValue: false, description: 'Deploy to STAGE environment')
+        booleanParam(name: 'DEPLOY_TO_PROD', defaultValue: false, description: 'Deploy to PROD environment')
     }
     
     environment {
         BUILD_DATE = sh(script: 'date -u +%Y-%m-%dT%H:%M:%SZ', returnStdout: true).trim()
         GIT_COMMIT_HASH = sh(script: 'git rev-parse HEAD || echo "unknown"', returnStdout: true).trim()
         GIT_BRANCH_NAME = sh(script: 'git rev-parse --abbrev-ref HEAD || echo "master"', returnStdout: true).trim()
+        EFFECTIVE_BUILD_NUMBER = "${params.USE_BUILD_NUMBER ?: env.BUILD_NUMBER}"
     }
     
     stages {
@@ -346,11 +355,15 @@ pipeline {
         }
         
         stage('Build') {
+            when {
+                expression { params.USE_BUILD_NUMBER == null || params.USE_BUILD_NUMBER == '' }
+            }
             steps {
                 script {
                     echo "=========================================="
                     echo "🚀 Building Release Version: ${params.RELEASE_VERSION}"
                     echo "Application: ${params.APPLICATION}"
+                    echo "Build Number: ${env.BUILD_NUMBER}"
                     echo "=========================================="
                     
                     dir("apps/${params.APPLICATION}") {
@@ -380,17 +393,40 @@ EOF
             }
         }
         
+        stage('Reuse Build') {
+            when {
+                expression { params.USE_BUILD_NUMBER != null && params.USE_BUILD_NUMBER != '' }
+            }
+            steps {
+                script {
+                    echo "=========================================="
+                    echo "♻️  Reusing Existing Build"
+                    echo "=========================================="
+                    echo "Application: ${params.APPLICATION}"
+                    echo "Version: ${params.RELEASE_VERSION}"
+                    echo "Using Build Number: ${params.USE_BUILD_NUMBER}"
+                    echo "Current Job Build: ${env.BUILD_NUMBER}"
+                    echo "=========================================="
+                    echo "⚠️  Skipping build stage - deploying existing artifacts"
+                }
+            }
+        }
+        
         stage('Deploy to DEV') {
+            when {
+                expression { params.DEPLOY_TO_DEV == true }
+            }
             steps {
                 script {
                     echo "=========================================="
                     echo "🎯 Deploying to DEV Environment"
+                    echo "Build Number: ${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
                     dir("apps/${params.APPLICATION}") {
                         sh """
                             chmod +x deploy.sh
-                            ./deploy.sh DEV ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                            ./deploy.sh DEV ${params.RELEASE_VERSION} ${env.EFFECTIVE_BUILD_NUMBER}
                         """
                     }
                 }
@@ -398,14 +434,18 @@ EOF
         }
         
         stage('Deploy to TEST') {
+            when {
+                expression { params.DEPLOY_TO_TEST == true }
+            }
             steps {
                 script {
                     echo "=========================================="
                     echo "⏸️  TEST Deployment - Approval Required"
+                    echo "Build Number: ${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
                     timeout(time: 24, unit: 'HOURS') {
-                        input message: 'Deploy to TEST environment?', 
+                        input message: "Approve deployment of build #${env.EFFECTIVE_BUILD_NUMBER} to TEST?", 
                               ok: 'Deploy to TEST',
                               submitter: 'admin',
                               submitterParameter: 'APPROVER'
@@ -418,7 +458,7 @@ EOF
                     dir("apps/${params.APPLICATION}") {
                         sh """
                             chmod +x deploy.sh
-                            ./deploy.sh TEST ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                            ./deploy.sh TEST ${params.RELEASE_VERSION} ${env.EFFECTIVE_BUILD_NUMBER}
                         """
                     }
                 }
@@ -426,14 +466,18 @@ EOF
         }
         
         stage('Deploy to STAGE') {
+            when {
+                expression { params.DEPLOY_TO_STAGE == true }
+            }
             steps {
                 script {
                     echo "=========================================="
                     echo "⏸️  STAGE Deployment - Approval Required"
+                    echo "Build Number: ${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
                     timeout(time: 24, unit: 'HOURS') {
-                        input message: 'Deploy to STAGE environment?', 
+                        input message: "Approve deployment of build #${env.EFFECTIVE_BUILD_NUMBER} to STAGE?", 
                               ok: 'Deploy to STAGE',
                               submitter: 'admin',
                               submitterParameter: 'APPROVER'
@@ -446,7 +490,7 @@ EOF
                     dir("apps/${params.APPLICATION}") {
                         sh """
                             chmod +x deploy.sh
-                            ./deploy.sh STAGE ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                            ./deploy.sh STAGE ${params.RELEASE_VERSION} ${env.EFFECTIVE_BUILD_NUMBER}
                         """
                     }
                 }
@@ -454,14 +498,18 @@ EOF
         }
         
         stage('Deploy to PROD') {
+            when {
+                expression { params.DEPLOY_TO_PROD == true }
+            }
             steps {
                 script {
                     echo "=========================================="
                     echo "⏸️  PRODUCTION Deployment - Approval Required"
+                    echo "Build Number: ${env.EFFECTIVE_BUILD_NUMBER}"
                     echo "=========================================="
                     
                     timeout(time: 72, unit: 'HOURS') {
-                        input message: 'Deploy to PRODUCTION environment?', 
+                        input message: "Approve deployment of build #${env.EFFECTIVE_BUILD_NUMBER} to PRODUCTION?", 
                               ok: 'Deploy to PROD',
                               submitter: 'admin',
                               submitterParameter: 'APPROVER'
@@ -475,7 +523,7 @@ EOF
                     dir("apps/${params.APPLICATION}") {
                         sh """
                             chmod +x deploy.sh
-                            ./deploy.sh PROD ${params.RELEASE_VERSION} ${env.BUILD_NUMBER}
+                            ./deploy.sh PROD ${params.RELEASE_VERSION} ${env.EFFECTIVE_BUILD_NUMBER}
                         """
                     }
                 }
@@ -485,10 +533,21 @@ EOF
     
     post {
         success {
-            echo "=========================================="
-            echo "✅ Pipeline completed successfully!"
-            echo "Release ${params.RELEASE_VERSION} deployed through all environments"
-            echo "=========================================="
+            script {
+                def deployedEnvs = []
+                if (params.DEPLOY_TO_DEV) deployedEnvs.add('DEV')
+                if (params.DEPLOY_TO_TEST) deployedEnvs.add('TEST')
+                if (params.DEPLOY_TO_STAGE) deployedEnvs.add('STAGE')
+                if (params.DEPLOY_TO_PROD) deployedEnvs.add('PROD')
+                
+                def buildInfo = params.USE_BUILD_NUMBER ? "Reused build #${params.USE_BUILD_NUMBER}" : "New build #${env.BUILD_NUMBER}"
+                
+                echo "=========================================="
+                echo "✅ Pipeline completed successfully!"
+                echo "${buildInfo}"
+                echo "Release ${params.RELEASE_VERSION} deployed to: ${deployedEnvs.join(', ')}"
+                echo "=========================================="
+            }
         }
         failure {
             echo "=========================================="
@@ -507,6 +566,7 @@ EOF
         }
     }
 }
+
 
 // Pipeline Job 2: Selective Promotion Pipeline
 pipelineJob('selective-promotion-pipeline') {
