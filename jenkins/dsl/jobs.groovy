@@ -1342,6 +1342,11 @@ EOF
     echo "✅ API Build #${EFFECTIVE_BUILD} created successfully"
     cat api-build-${EFFECTIVE_BUILD}.json
     
+    # Return to workspace root after build creation
+    cd ../..
+    echo ""
+    echo "📂 Returned to workspace root: $(pwd)"
+    
 elif [ "${ACTION}" = "PROMOTE_EXISTING" ]; then
     EFFECTIVE_BUILD="${EXISTING_BUILD_NUMBER}"
     
