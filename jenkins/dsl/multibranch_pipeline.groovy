@@ -70,12 +70,6 @@ The pipeline automatically:
                 // Discover pull requests
                 gitHubPullRequestDiscovery {
                     strategyId(1) // Discover each pull request once
-                }
-                
-                // Discover tags (optional)
-                // gitHubTagDiscovery()
-                
-                // Clean before checkout
                 cleanBeforeCheckoutTrait()
                 
                 // Clone options
