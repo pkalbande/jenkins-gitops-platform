@@ -949,7 +949,7 @@ kubectl get pvc -n jenkins-prod
 
 **Issue 3: Slow failover**
 ```bash
-# Tune health check intervals
+# Tune https://bitbucket.org/hotelkey/hk-k8s/pull-requests/477/diff intervals
 # Edit StatefulSet:
 # livenessProbe.periodSeconds: 10
 # livenessProbe.failureThreshold: 3

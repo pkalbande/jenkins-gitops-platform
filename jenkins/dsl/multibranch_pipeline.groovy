@@ -38,54 +38,14 @@ The pipeline automatically:
     
     // logRotator is not supported for multibranchPipelineJob
     
-    // Branch Sources - GitHub
+    // Branch Sources - generic Git (avoids GitHub-specific plugin requirements)
     branchSources {
-        github {
-            id('github-multibranch')
-            scanCredentialsId('github-token')
-            repoOwner('pkalbande')
-            repository('jenkins-gitops-platform')
-            
-            // Configure branch discovery
-            includes('*') // Include all branches
-            
-            // Exclude patterns (optional)
-            // excludes('*/wip/*')
-            
-            // Build strategies
-            buildForkPRHead(true)  // Build PRs from forks
-            buildForkPRMerge(false) // Don't build merge commits from forks
-            
-            // Traits (behaviors)
-            traits {
-                // Discover branches
-                gitHubBranchDiscovery {
-                    strategyId(1) // Exclude branches that are also filed as PRs
-                }
-                
-                // Discover pull requests
-                gitHubPullRequestDiscovery {
-                    strategyId(1) // Discover each pull request once
-                }
-                cleanBeforeCheckoutTrait()
-                
-                // Clone options
-                cloneOptionTrait {
-                    extension {
-                        shallow(true)
-                        depth(1)
-                        noTags(false)
-                        honorRefspec(true)
-                    }
-                }
-                
-                // Timeout for checkout
-                checkoutOptionTrait {
-                    extension {
-                        timeout(10) // 10 minutes
-                    }
-                }
-            }
+        git {
+            id('git-multibranch-example')
+            remote('https://github.com/pkalbande/jenkins-gitops-platform.git')
+            credentialsId('github-token')
+            includes('*')
+            excludes('')
         }
     }
     
@@ -165,22 +125,12 @@ multibranchPipelineJob('multibranch-app1-node') {
     displayName('🌿 Multibranch: app1-node')
     
     branchSources {
-        github {
-            id('github-app1')
-            scanCredentialsId('github-token')
-            repoOwner('pkalbande')
-            repository('jenkins-gitops-platform')
+        git {
+            id('git-app1')
+            remote('https://github.com/pkalbande/jenkins-gitops-platform.git')
+            credentialsId('github-token')
             includes('*')
-            
-            traits {
-                gitHubBranchDiscovery {
-                    strategyId(1)
-                }
-                gitHubPullRequestDiscovery {
-                    strategyId(1)
-                }
-                cleanBeforeCheckoutTrait()
-            }
+            excludes('')
         }
     }
     
