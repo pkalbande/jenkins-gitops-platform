@@ -127,68 +127,6 @@ jenkins:
                     }
                   }
                 }
-                promotions {
-                  promotion {
-                    name('Deploy-to-DEV')
-                    icon('star-gold')
-                    conditions {
-                      manual('admin')
-                    }
-                    actions {
-                      shell('''
-                        echo "Promoting build ${BUILD_NUMBER} to DEV environment"
-                        echo "Application: ${APPLICATION}"
-                        echo "Version: ${VERSION}"
-                      ''')
-                    }
-                  }
-                  promotion {
-                    name('Deploy-to-QA')
-                    icon('star-blue')
-                    conditions {
-                      manual('admin')
-                      upstream('Deploy-to-DEV')
-                    }
-                    actions {
-                      shell('''
-                        echo "Promoting build ${BUILD_NUMBER} to QA environment"
-                        echo "Application: ${APPLICATION}"
-                        echo "Version: ${VERSION}"
-                      ''')
-                    }
-                  }
-                  promotion {
-                    name('Deploy-to-STAGE')
-                    icon('star-silver')
-                    conditions {
-                      manual('admin')
-                      upstream('Deploy-to-QA')
-                    }
-                    actions {
-                      shell('''
-                        echo "Promoting build ${BUILD_NUMBER} to STAGE environment"
-                        echo "Application: ${APPLICATION}"
-                        echo "Version: ${VERSION}"
-                      ''')
-                    }
-                  }
-                  promotion {
-                    name('Deploy-to-PROD')
-                    icon('star-red')
-                    conditions {
-                      manual('admin')
-                      upstream('Deploy-to-STAGE')
-                    }
-                    actions {
-                      shell('''
-                        echo "Promoting build ${BUILD_NUMBER} to PROD environment"
-                        echo "Application: ${APPLICATION}"
-                        echo "Version: ${VERSION}"
-                        echo "This is the final production deployment"
-                      ''')
-                    }
-                  }
-                }
               }
               parameters {
                 choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
