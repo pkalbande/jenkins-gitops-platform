@@ -2030,7 +2030,7 @@ echo "╚═══════════════════════�
     
     wrappers {
         credentialsBinding {
-            usernamePassword('DOCKER_USERNAME', 'DOCKER_PASSWORD', 'docker-registry')
+            usernamePassword('parag47', 'Ironwar@47', 'docker-registry')
         }
     }
     
@@ -2221,6 +2221,351 @@ echo ""
             pattern('apps/*/build-metadata.json, apps/*/release-*.json')
             fingerprint(true)
             allowEmpty(true)
+        }
+    }
+}
+
+// ==============================================================================
+// Pipeline Job: pipeline-poi-47
+// ==============================================================================
+pipelineJob('pipeline-poi-47') {
+    description('🚀 Complete CI/CD Pipeline with Multi-Environment Promotion (DEV → QA → STAGE → PROD)')
+    displayName('🚀 Pipeline POI-47')
+    
+    logRotator {
+        daysToKeep(30)
+        numToKeep(20)
+        artifactDaysToKeep(30)
+        artifactNumToKeep(20)
+    }
+    
+    definition {
+        cps {
+            script('''
+pipeline {
+    agent any
+    
+    parameters {
+        // Add your parameters here based on your freestyle job
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        string(name: 'VERSION', defaultValue: '', description: 'Release version')
+        choice(name: 'BUILD_TYPE', choices: ['snapshot', 'release'], description: 'Build type')
+    }
+    
+    environment {
+        // Define environment variables
+        MAVEN_OPTS = '-Xmx1024m'
+        JAVA_HOME = tool name: 'JDK11', type: 'jdk'
+        // Add other environment variables as needed
+    }
+    
+    options {
+        // Build options
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "Checking out code from branch: ${params.BRANCH}"
+                    checkout scm
+                    // Or specific Git checkout:
+                    // git branch: "${params.BRANCH}", 
+                    //     url: 'https://your-repo-url.git',
+                    //     credentialsId: 'your-credentials-id'
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    echo 'Building the application...'
+                    // Replace with your actual build commands
+                    // For Maven:
+                    sh 'mvn clean package -DskipTests'
+                    // For Gradle:
+                    // sh './gradlew clean build -x test'
+                    // For npm:
+                    // sh 'npm install && npm run build'
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                script {
+                    echo 'Running unit tests...'
+                    // For Maven:
+                    sh 'mvn test'
+                    // For Gradle:
+                    // sh './gradlew test'
+                }
+            }
+            post {
+                always {
+                    // Publish test results
+                    junit '**/target/surefire-reports/*.xml'
+                    // Or for Gradle:
+                    // junit '**/build/test-results/test/*.xml'
+                }
+            }
+        }
+        
+        stage('Code Quality Analysis') {
+            steps {
+                script {
+                    echo 'Running code quality checks...'
+                    // SonarQube analysis example:
+                    // sh 'mvn sonar:sonar'
+                }
+            }
+        }
+        
+        stage('Archive Artifacts') {
+            steps {
+                script {
+                    echo 'Archiving build artifacts...'
+                    archiveArtifacts artifacts: '**/target/*.jar,**/target/*.war', 
+                                   fingerprint: true,
+                                   allowEmptyArchive: false
+                    // Adjust path based on your build output
+                }
+            }
+        }
+        
+        stage('Promote to DEV') {
+            steps {
+                script {
+                    echo "=== AUTOMATIC PROMOTION TO DEV ==="
+                    echo "Build #${BUILD_NUMBER} is being promoted to DEV environment"
+                    
+                    // Copy artifacts or deploy
+                    sh '''
+                        echo "Deploying to DEV environment..."
+                        # Add your DEV deployment commands here
+                        # ./deploy.sh dev
+                        # kubectl apply -f k8s/dev/
+                        # ansible-playbook -i inventory/dev deploy.yml
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Successfully deployed to DEV'
+                }
+                failure {
+                    echo 'Failed to deploy to DEV'
+                }
+            }
+        }
+        
+        stage('QA Approval Gate') {
+            steps {
+                script {
+                    echo "=== WAITING FOR QA APPROVAL ==="
+                    echo "Build #${BUILD_NUMBER} is ready for QA promotion"
+                    
+                    timeout(time: 7, unit: 'DAYS') {
+                        def userInput = input(
+                            message: "Promote Build #${BUILD_NUMBER} to QA Environment?",
+                            ok: 'Approve Promotion to QA',
+                            submitter: 'qa-team,admin',
+                            parameters: [
+                                text(name: 'QA_NOTES', 
+                                     defaultValue: '', 
+                                     description: 'QA approval notes (optional)')
+                            ]
+                        )
+                        echo "QA Approval Notes: ${userInput}"
+                        env.QA_APPROVAL_NOTES = userInput
+                    }
+                }
+            }
+        }
+        
+        stage('Promote to QA') {
+            steps {
+                script {
+                    echo "=== PROMOTING TO QA ==="
+                    echo "Build #${BUILD_NUMBER} approved for QA deployment"
+                    
+                    // Retrieve artifacts from the build
+                    sh '''
+                        echo "Deploying to QA environment..."
+                        # Add your QA deployment commands here
+                        # ./deploy.sh qa
+                        # kubectl apply -f k8s/qa/
+                        # ansible-playbook -i inventory/qa deploy.yml
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Successfully deployed to QA'
+                    emailext(
+                        subject: "Build #${BUILD_NUMBER} deployed to QA",
+                        body: "Build has been successfully deployed to QA environment",
+                        to: 'qa-team@company.com'
+                    )
+                }
+            }
+        }
+        
+        stage('STAGE Approval Gate') {
+            steps {
+                script {
+                    echo "=== WAITING FOR STAGE APPROVAL ==="
+                    echo "Build #${BUILD_NUMBER} is ready for STAGE promotion"
+                    
+                    timeout(time: 7, unit: 'DAYS') {
+                        def userInput = input(
+                            message: "Promote Build #${BUILD_NUMBER} to STAGE Environment?",
+                            ok: 'Approve Promotion to STAGE',
+                            submitter: 'release-managers,admin',
+                            parameters: [
+                                text(name: 'STAGE_NOTES', 
+                                     defaultValue: '', 
+                                     description: 'Stage approval notes (optional)')
+                            ]
+                        )
+                        echo "STAGE Approval Notes: ${userInput}"
+                        env.STAGE_APPROVAL_NOTES = userInput
+                    }
+                }
+            }
+        }
+        
+        stage('Promote to STAGE') {
+            steps {
+                script {
+                    echo "=== PROMOTING TO STAGE ==="
+                    echo "Build #${BUILD_NUMBER} approved for STAGE deployment"
+                    
+                    sh '''
+                        echo "Deploying to STAGE environment..."
+                        # Add your STAGE deployment commands here
+                        # ./deploy.sh stage
+                        # kubectl apply -f k8s/stage/
+                        # ansible-playbook -i inventory/stage deploy.yml
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Successfully deployed to STAGE'
+                }
+            }
+        }
+        
+        stage('PROD Approval Gate') {
+            steps {
+                script {
+                    echo "=== WAITING FOR PRODUCTION APPROVAL ==="
+                    echo "Build #${BUILD_NUMBER} is ready for PRODUCTION promotion"
+                    
+                    timeout(time: 14, unit: 'DAYS') {
+                        def userInput = input(
+                            message: "Promote Build #${BUILD_NUMBER} to PRODUCTION?",
+                            ok: 'Approve Production Deployment',
+                            submitter: 'prod-approvers,admin',
+                            parameters: [
+                                text(name: 'PROD_NOTES', 
+                                     defaultValue: '', 
+                                     description: 'Production approval notes (REQUIRED)'),
+                                string(name: 'CHANGE_TICKET', 
+                                       defaultValue: '', 
+                                       description: 'Change ticket number'),
+                                choice(name: 'DEPLOYMENT_WINDOW',
+                                       choices: ['Immediate', 'Scheduled Maintenance'],
+                                       description: 'Deployment timing')
+                            ]
+                        )
+                        echo "Production Approval Notes: ${userInput.PROD_NOTES}"
+                        echo "Change Ticket: ${userInput.CHANGE_TICKET}"
+                        echo "Deployment Window: ${userInput.DEPLOYMENT_WINDOW}"
+                        
+                        env.PROD_APPROVAL_NOTES = userInput.PROD_NOTES
+                        env.CHANGE_TICKET = userInput.CHANGE_TICKET
+                    }
+                }
+            }
+        }
+        
+        stage('Promote to PROD') {
+            steps {
+                script {
+                    echo "=== PROMOTING TO PRODUCTION ==="
+                    echo "Build #${BUILD_NUMBER} approved for PRODUCTION deployment"
+                    echo "Change Ticket: ${env.CHANGE_TICKET}"
+                    
+                    // Additional safety check
+                    echo "Starting production deployment in 10 seconds..."
+                    sleep 10
+                    
+                    sh '''
+                        echo "Deploying to PRODUCTION environment..."
+                        # Add your PRODUCTION deployment commands here
+                        # ./deploy.sh prod
+                        # kubectl apply -f k8s/prod/
+                        # ansible-playbook -i inventory/prod deploy.yml
+                    '''
+                }
+            }
+            post {
+                success {
+                    echo 'Successfully deployed to PRODUCTION'
+                    emailext(
+                        subject: "✅ Build #${BUILD_NUMBER} DEPLOYED TO PRODUCTION",
+                        body: """
+                            Build #${BUILD_NUMBER} has been successfully deployed to PRODUCTION.
+                            
+                            Change Ticket: ${env.CHANGE_TICKET}
+                            Approval Notes: ${env.PROD_APPROVAL_NOTES}
+                            Deployed By: ${env.BUILD_USER}
+                            Timestamp: ${new Date()}
+                        """,
+                        to: 'prod-team@company.com,management@company.com'
+                    )
+                }
+                failure {
+                    echo 'PRODUCTION deployment FAILED!'
+                    emailext(
+                        subject: "❌ PRODUCTION DEPLOYMENT FAILED - Build #${BUILD_NUMBER}",
+                        body: "URGENT: Production deployment has failed. Immediate attention required.",
+                        to: 'prod-team@company.com,oncall@company.com'
+                    )
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Pipeline completed successfully! Build #${BUILD_NUMBER}"
+        }
+        failure {
+            echo "Pipeline failed at some stage"
+            // Send failure notifications
+        }
+        always {
+            // Cleanup
+            cleanWs(
+                deleteDirs: true,
+                patterns: [
+                    [pattern: '**/target/**', type: 'INCLUDE'],
+                    [pattern: '**/.git/**', type: 'EXCLUDE']
+                ]
+            )
+        }
+    }
+}
+            '''.stripIndent())
+            sandbox()
         }
     }
 }
