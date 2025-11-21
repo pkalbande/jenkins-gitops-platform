@@ -2345,13 +2345,13 @@ pipeline {
                     echo "Build #${BUILD_NUMBER} is being promoted to DEV environment"
                     
                     // Copy artifacts or deploy
-                    sh '''
+                    sh """
                         echo "Deploying to DEV environment..."
                         # Add your DEV deployment commands here
                         # ./deploy.sh dev
                         # kubectl apply -f k8s/dev/
                         # ansible-playbook -i inventory/dev deploy.yml
-                    '''
+                    """
                 }
             }
             post {
@@ -2395,13 +2395,13 @@ pipeline {
                     echo "Build #${BUILD_NUMBER} approved for QA deployment"
                     
                     // Retrieve artifacts from the build
-                    sh '''
+                    sh """
                         echo "Deploying to QA environment..."
                         # Add your QA deployment commands here
                         # ./deploy.sh qa
                         # kubectl apply -f k8s/qa/
                         # ansible-playbook -i inventory/qa deploy.yml
-                    '''
+                    """
                 }
             }
             post {
@@ -2446,13 +2446,13 @@ pipeline {
                     echo "=== PROMOTING TO STAGE ==="
                     echo "Build #${BUILD_NUMBER} approved for STAGE deployment"
                     
-                    sh '''
+                    sh """
                         echo "Deploying to STAGE environment..."
                         # Add your STAGE deployment commands here
                         # ./deploy.sh stage
                         # kubectl apply -f k8s/stage/
                         # ansible-playbook -i inventory/stage deploy.yml
-                    '''
+                    """
                 }
             }
             post {
@@ -2507,13 +2507,13 @@ pipeline {
                     echo "Starting production deployment in 10 seconds..."
                     sleep 10
                     
-                    sh '''
+                    sh """
                         echo "Deploying to PRODUCTION environment..."
                         # Add your PRODUCTION deployment commands here
                         # ./deploy.sh prod
                         # kubectl apply -f k8s/prod/
                         # ansible-playbook -i inventory/prod deploy.yml
-                    '''
+                    """
                 }
             }
             post {
