@@ -2247,7 +2247,7 @@ pipeline {
     
     parameters {
         // Add your parameters here based on your freestyle job
-        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        string(name: 'BRANCH', defaultValue: 'master', description: 'Git branch to build')
         string(name: 'VERSION', defaultValue: '', description: 'Release version')
         choice(name: 'BUILD_TYPE', choices: ['snapshot', 'release'], description: 'Build type')
     }
