@@ -2511,13 +2511,6 @@ listView('Release & Deployment Dashboard') {
         buildButton()
     }
     
-    jobFilters {
-        status {
-            matchType(MatchType.INCLUDE_MATCHED)
-            status(Status.STABLE, Status.UNSTABLE, Status.FAILED)
-        }
-    }
-    
     recurse(true)
 }
 
@@ -2540,12 +2533,7 @@ listView('Deployment Status') {
         lastSuccess()
         lastFailure()
         lastDuration()
-        lastBuildConsole()
         buildButton()
-        
-        // Custom columns for build info
-        buildNumber()
-        lastSuccessBuildNumber()
     }
     
     recurse(false)
