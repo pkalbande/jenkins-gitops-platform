@@ -2264,11 +2264,9 @@ pipeline {
             steps {
                 script {
                     echo "Checking out code from branch: ${params.BRANCH}"
-                    checkout scm
-                    // Or specific Git checkout:
-                    // git branch: "${params.BRANCH}", 
-                    //     url: 'https://your-repo-url.git',
-                    //     credentialsId: 'your-credentials-id'
+                    git branch: "${params.BRANCH}", 
+                        url: 'https://github.com/pkalbande/jenkins-gitops-platform.git',
+                        credentialsId: 'github-token'
                 }
             }
         }
