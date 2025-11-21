@@ -2254,8 +2254,8 @@ pipeline {
     
     environment {
         // Define environment variables
-        MAVEN_OPTS = '-Xmx1024m'
-        JAVA_HOME = tool name: 'JDK11', type: 'jdk'
+        //MAVEN_OPTS = '-Xmx1024m'
+        //JAVA_HOME = tool name: 'JDK11', type: 'jdk'
         // Add other environment variables as needed
     }
     
