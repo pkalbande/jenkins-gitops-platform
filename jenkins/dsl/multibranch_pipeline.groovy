@@ -66,6 +66,7 @@ The pipeline automatically:
                 // Discover pull requests
                 gitHubPullRequestDiscovery {
                     strategyId(1) // Discover each pull request once
+                }
                 cleanBeforeCheckoutTrait()
                 
                 // Clone options
@@ -162,11 +163,6 @@ The pipeline automatically:
 multibranchPipelineJob('multibranch-app1-node') {
     description('🌿 Multibranch Pipeline for app1-node - Automatically builds all branches')
     displayName('🌿 Multibranch: app1-node')
-    
-    logRotator {
-        daysToKeep(30)
-        numToKeep(20)
-    }
     
     branchSources {
         github {
