@@ -2551,10 +2551,6 @@ pipeline {
             echo "Pipeline failed at some stage"
             // Send failure notifications
         }
-        always {
-            // Cleanup
-            deleteDir()
-        }
     }
 }
             '''.stripIndent())
