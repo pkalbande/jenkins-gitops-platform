@@ -2509,9 +2509,6 @@ listView('Release & Deployment Dashboard') {
         lastFailure()
         lastDuration()
         buildButton()
-        
-        // Show promotion status if available
-        promotionStatus()
     }
     
     jobFilters {
