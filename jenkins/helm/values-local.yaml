@@ -191,9 +191,9 @@ jenkins:
                 }
               }
               parameters {
-                choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to build')
-                string(name: 'VERSION', defaultValue: '1.0.0', description: 'Version number for the release (e.g., 1.0.0)')
-                booleanParam(name: 'DEPLOY_TO_DEV', defaultValue: true, description: 'Automatically deploy to dev environment after build')
+                choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to build')
+                stringParam('VERSION', '1.0.0', 'Version number for the release (e.g., 1.0.0)')
+                booleanParam('DEPLOY_TO_DEV', true, 'Automatically deploy to dev environment after build')
               }
               definition {
                 cpsScm {
@@ -225,11 +225,11 @@ jenkins:
                 }
               }
               parameters {
-                choice(name: 'APPLICATION', choices: ['app1-node', 'app2-python'], description: 'Select application to promote')
-                string(name: 'BUILD_NUMBER', defaultValue: '', description: 'Build number from release-build-job to promote')
-                string(name: 'VERSION', defaultValue: '', description: 'Version to promote (e.g., 1.0.0)')
-                choice(name: 'PROMOTION_LEVEL', choices: ['Deploy-to-DEV', 'Deploy-to-QA', 'Deploy-to-STAGE', 'Deploy-to-PROD'], description: 'Select promotion level')
-                text(name: 'APPROVAL_NOTES', defaultValue: '', description: 'Approval notes and justification')
+                choiceParam('APPLICATION', ['app1-node', 'app2-python'], 'Select application to promote')
+                stringParam('BUILD_NUMBER', '', 'Build number from release-build-job to promote')
+                stringParam('VERSION', '', 'Version to promote (e.g., 1.0.0)')
+                choiceParam('PROMOTION_LEVEL', ['Deploy-to-DEV', 'Deploy-to-QA', 'Deploy-to-STAGE', 'Deploy-to-PROD'], 'Select promotion level')
+                textParam('APPROVAL_NOTES', '', 'Approval notes and justification')
               }
               definition {
                 cpsScm {
