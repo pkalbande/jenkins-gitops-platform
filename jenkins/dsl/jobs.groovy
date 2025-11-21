@@ -2252,13 +2252,6 @@ pipeline {
         choice(name: 'BUILD_TYPE', choices: ['snapshot', 'release'], description: 'Build type')
     }
     
-    environment {
-        // Define environment variables
-        //MAVEN_OPTS = '-Xmx1024m'
-        //JAVA_HOME = tool name: 'JDK11', type: 'jdk'
-        // Add other environment variables as needed
-    }
-    
     options {
         // Build options
         buildDiscarder(logRotator(numToKeepStr: '10'))
