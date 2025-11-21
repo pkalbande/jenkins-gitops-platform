@@ -2563,3 +2563,95 @@ listView('Release Pipeline Flow') {
     
     recurse(false)
 }
+
+
+
+
+
+def environments = [
+    [name: "Dev",   env: "dev",   region: "us-east-1"],
+    [name: "QA",    env: "qa",    region: "us-east-1"],
+    [name: "Stage", env: "stage", region: "us-east-1"],
+    [name: "Prod",  env: "prod",  region: "us-east-1"]
+]
+
+// Create PLAN & APPLY jobs for each environment
+environments.eachWithIndex { item, idx ->
+
+    def planJob = "${item.name}-US-EAST1-Plan"
+    def applyJob = "${item.name}-US-EAST1-Apply"
+
+    job(planJob) {
+        description("Terraform PLAN for ${item.name} environment")
+
+        parameters {
+            stringParam("ENV", item.env)
+            stringParam("REGION", item.region)
+        }
+
+        scm {
+            git {
+                remote {
+                    url("https://your-repo-url.git")
+                }
+                branch("main")
+            }
+        }
+
+        wrappers {
+            colorizeOutput()
+        }
+
+        steps {
+            shell("""
+                echo "Running Terraform INIT for ${item.env}"
+                terraform init -backend-config=backend/${item.env}.tfbackend
+
+                echo "Running Terraform PLAN for ${item.env}"
+                terraform plan -var env=${item.env} -var region=${item.region}
+            """)
+        }
+
+        // Trigger APPLY job on success
+        publishers {
+            downstream(applyJob, "SUCCESS")
+        }
+    }
+
+    job(applyJob) {
+        description("Terraform APPLY for ${item.name} environment")
+
+        parameters {
+            stringParam("ENV", item.env)
+            stringParam("REGION", item.region)
+        }
+
+        scm {
+            git {
+                remote {
+                    url("https://your-repo-url.git")
+                }
+                branch("main")
+            }
+        }
+
+        wrappers {
+            colorizeOutput()
+        }
+
+        steps {
+            shell("""
+                echo "Running Terraform APPLY for ${item.env}"
+                terraform apply -auto-approve -var env=\$ENV -var region=\$REGION
+            """)
+        }
+
+        // Chain to the next environment PLAN job
+        publishers {
+            if (idx < environments.size - 1) {
+                def nextEnv = environments[idx + 1]
+                downstream("${nextEnv.name}-US-EAST1-Plan", "SUCCESS")
+            }
+        }
+    }
+}
