@@ -157,7 +157,10 @@ jenkins:
                 buildDiscarder {
                   strategy {
                     logRotator {
+                      daysToKeepStr('30')
                       numToKeepStr('20')
+                      artifactDaysToKeepStr('30')
+                      artifactNumToKeepStr('20')
                     }
                   }
                 }
