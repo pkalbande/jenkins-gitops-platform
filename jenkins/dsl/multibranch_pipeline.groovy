@@ -13,6 +13,7 @@ Branch Behavior:
 │ Feature/Bugfix Branches (feature/*, bugfix/*)                │
 │   • Build & Test                                            │
 │   • Build Docker Image (local)                              │
+}
 │   • Create PR Comments                                      │
 │   • No deployment                                            │
 ├─────────────────────────────────────────────────────────────┤
