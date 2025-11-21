@@ -2539,24 +2539,27 @@ listView('Deployment Status') {
     recurse(false)
 }
 
-// Pipeline View for Release Pipeline Flow
-buildPipelineView('Release Pipeline Flow') {
-    description('📈 Visualize the release pipeline flow from build to production')
+// Pipeline Jobs View
+listView('Release Pipeline Flow') {
+    description('📈 Release pipeline jobs from build to production')
     filterBuildQueue()
     filterExecutors()
     
-    displayedBuilds(10)
-    title('Release Pipeline Visualization')
-    selectedJob('docker-argocd-release-job')
+    jobs {
+        name('docker-argocd-release-job')
+        name('promoted-build-job')
+        regex('.*pipeline.*')
+    }
     
-    showPipelineParameters()
-    showPipelineParametersInHeaders()
-    showPipelineDefinitionHeader()
-    refreshFrequency(5)
+    columns {
+        status()
+        weather()
+        name()
+        lastSuccess()
+        lastFailure()
+        lastDuration()
+        buildButton()
+    }
     
-    startsWithParameters()
-    consoleOutputLinkStyle('Lightbox')
-    cssUrl('')
-    triggerOnlyLatestJob(true)
-    alwaysAllowManualTrigger(true)
+    recurse(false)
 }
