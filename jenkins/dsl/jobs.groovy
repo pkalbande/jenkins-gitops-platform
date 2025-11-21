@@ -2553,13 +2553,7 @@ pipeline {
         }
         always {
             // Cleanup
-            cleanWs(
-                deleteDirs: true,
-                patterns: [
-                    [pattern: '**/target/**', type: 'INCLUDE'],
-                    [pattern: '**/.git/**', type: 'EXCLUDE']
-                ]
-            )
+            deleteDir()
         }
     }
 }
