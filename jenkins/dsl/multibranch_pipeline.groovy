@@ -12,8 +12,8 @@ Branch Behavior:
 ┌─────────────────────────────────────────────────────────────┐
 │ Feature/Bugfix Branches (feature/*, bugfix/*)                │
 │   • Build & Test                                            │
+│   • Create PR Comments                                      │
 │   • Build Docker Image (local)                              │
-}
 │   • Create PR Comments                                      │
 │   • No deployment                                            │
 ├─────────────────────────────────────────────────────────────┤
@@ -36,12 +36,7 @@ The pipeline automatically:
 ''')
     displayName('🌿 Multibranch Pipeline Example')
     
-    logRotator {
-        daysToKeep(30)
-        numToKeep(20)
-        artifactDaysToKeep(30)
-        artifactNumToKeep(20)
-    }
+    // logRotator is not supported for multibranchPipelineJob
     
     // Branch Sources - GitHub
     branchSources {
