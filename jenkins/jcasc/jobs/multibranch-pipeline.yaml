@@ -1,0 +1,59 @@
+jobs:
+  # Multibranch Pipeline Example using JCasC
+  - script: |
+      multibranchPipelineJob('multibranch-pipeline-example') {
+        description('''
+      🌿 Multibranch Pipeline Example
+      
+      Automatically discovers and builds branches from the repository.
+      Each branch gets its own job that runs the Jenkinsfile.
+      ''')
+        displayName('🌿 Multibranch Pipeline Example')
+        
+        logRotator {
+          daysToKeep(30)
+          numToKeep(20)
+        }
+        
+        branchSources {
+          github {
+            id('github-multibranch')
+            scanCredentialsId('github-token')
+            repoOwner('pkalbande')
+            repository('jenkins-gitops-platform')
+            includes('*')
+            
+            traits {
+              gitHubBranchDiscovery {
+                strategyId(1)
+              }
+              gitHubPullRequestDiscovery {
+                strategyId(1)
+              }
+              cleanBeforeCheckoutTrait()
+            }
+          }
+        }
+        
+        orphanedItemStrategy {
+          discardOldItems {
+            daysToKeep(7)
+            numToKeep(10)
+          }
+        }
+        
+        factory {
+          workflowBranchProjectFactory {
+            scriptPath('jenkins/pipelines/multibranch/Jenkinsfile')
+          }
+        }
+        
+        properties {
+          pipelineTriggers {
+            triggers {
+              scm('H/15 * * * *')
+            }
+          }
+        }
+      }
+

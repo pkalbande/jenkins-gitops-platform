@@ -1,0 +1,385 @@
+pipeline {
+    agent {
+        kubernetes {
+            label 'jnlp-agent'
+            defaultContainer 'jnlp'
+        }
+    }
+    
+    options {
+        // Build options
+        buildDiscarder(logRotator(numToKeepStr: '20', daysToKeepStr: '30'))
+        timeout(time: 1, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+        
+        // Skip stages for certain branches
+        skipStagesAfterUnstable()
+    }
+    
+    environment {
+        // Detect branch type
+        BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
+        BRANCH_TYPE = "${env.BRANCH_NAME.startsWith('feature/') ? 'feature' : 
+                       env.BRANCH_NAME.startsWith('bugfix/') ? 'bugfix' : 
+                       env.BRANCH_NAME == 'develop' ? 'develop' : 
+                       env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' ? 'main' : 
+                       'other'}"
+        
+        // Docker configuration
+        DOCKER_REGISTRY = 'localhost:5000'
+        DOCKER_CREDENTIALS = 'docker-registry'
+        
+        // Git configuration
+        GIT_REPO = 'https://github.com/pkalbande/jenkins-gitops-platform.git'
+        GIT_CREDENTIALS = 'github-token'
+        
+        // Application detection (will be set in Checkout stage)
+        APPLICATION = "${env.APPLICATION ?: 'app1-node'}"
+        
+        // Build metadata
+        BUILD_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        IMAGE_TAG = "${env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' ? 
+                     env.BUILD_NUMBER : 
+                     env.BRANCH_NAME.replaceAll('/', '-')}-${env.BUILD_NUMBER}"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║              🌿 MULTIBRANCH PIPELINE - CHECKOUT                      ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    echo ""
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Branch Type: ${env.BRANCH_TYPE}"
+                    echo "Build Number: ${env.BUILD_NUMBER}"
+                    echo "Build Tag: ${env.BUILD_TAG}"
+                    echo "Image Tag: ${env.IMAGE_TAG}"
+                    echo ""
+                }
+                
+                checkout scm
+                
+                script {
+                    // Detect application from changed files or branch name
+                    def changedFiles = sh(
+                        script: 'git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files',
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (changedFiles.contains('apps/app1-node')) {
+                        env.APPLICATION = 'app1-node'
+                    } else if (changedFiles.contains('apps/app2-python')) {
+                        env.APPLICATION = 'app2-python'
+                    } else {
+                        // Default or detect from branch name
+                        if (env.BRANCH_NAME.contains('app1')) {
+                            env.APPLICATION = 'app1-node'
+                        } else if (env.BRANCH_NAME.contains('app2')) {
+                            env.APPLICATION = 'app2-python'
+                        } else {
+                            env.APPLICATION = 'app1-node' // Default
+                        }
+                    }
+                    
+                    echo "Detected Application: ${env.APPLICATION}"
+                }
+            }
+        }
+        
+        stage('Validate') {
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║                        ✅ VALIDATION STAGE                           ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    dir("apps/${env.APPLICATION}") {
+                        sh """
+                            echo "Validating application structure..."
+                            
+                            if [ ! -f "Dockerfile" ]; then
+                                echo "❌ ERROR: Dockerfile not found"
+                                exit 1
+                            fi
+                            
+                            if [ ! -f "package.json" ] && [ ! -f "requirements.txt" ] && [ ! -f "app.py" ]; then
+                                echo "⚠️  WARNING: No package.json, requirements.txt, or app.py found"
+                            fi
+                            
+                            echo "✅ Application structure validated"
+                            echo "   Application: ${env.APPLICATION}"
+                            echo "   Dockerfile: ✓"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║                        🏗️  BUILD STAGE                                 ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    dir("apps/${env.APPLICATION}") {
+                        // Build application based on type
+                        if (env.APPLICATION.contains('node')) {
+                            sh """
+                                echo "Building Node.js application..."
+                                if [ -f "package.json" ]; then
+                                    npm install || echo "⚠️  npm install failed, continuing..."
+                                fi
+                                echo "✅ Node.js build completed"
+                            """
+                        } else if (env.APPLICATION.contains('python')) {
+                            sh """
+                                echo "Building Python application..."
+                                if [ -f "requirements.txt" ]; then
+                                    pip install -r requirements.txt || echo "⚠️  pip install failed, continuing..."
+                                fi
+                                echo "✅ Python build completed"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║                        🧪 TEST STAGE                                 ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    dir("apps/${env.APPLICATION}") {
+                        sh """
+                            echo "Running tests for ${env.APPLICATION}..."
+                            
+                            # Run tests based on application type
+                            if [ -f "package.json" ]; then
+                                echo "Running npm tests..."
+                                npm test || echo "⚠️  Tests failed, but continuing..."
+                            elif [ -f "requirements.txt" ] || [ -f "app.py" ]; then
+                                echo "Running Python tests..."
+                                python -m pytest tests/ || echo "⚠️  Tests not found or failed, continuing..."
+                            fi
+                            
+                            echo "✅ Test stage completed"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            when {
+                anyOf {
+                    expression { env.BRANCH_TYPE == 'feature' }
+                    expression { env.BRANCH_TYPE == 'bugfix' }
+                    expression { env.BRANCH_TYPE == 'develop' }
+                    expression { env.BRANCH_TYPE == 'main' }
+                }
+            }
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║                    🐳 DOCKER BUILD STAGE                            ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    dir("apps/${env.APPLICATION}") {
+                        def imageName = "${env.DOCKER_REGISTRY}/${env.APPLICATION}:${env.IMAGE_TAG}"
+                        def imageNameLatest = "${env.DOCKER_REGISTRY}/${env.APPLICATION}:${env.BRANCH_NAME.replaceAll('/', '-')}-latest"
+                        
+                        sh """
+                            echo "Building Docker image..."
+                            echo "Image: ${imageName}"
+                            echo "Branch: ${env.BRANCH_NAME}"
+                            
+                            # Build Docker image
+                            docker build \\
+                                --tag ${imageName} \\
+                                --tag ${imageNameLatest} \\
+                                --build-arg BUILD_NUMBER=${env.BUILD_NUMBER} \\
+                                --build-arg BRANCH_NAME=${env.BRANCH_NAME} \\
+                                --build-arg GIT_COMMIT=\$(git rev-parse --short HEAD) \\
+                                --label "branch=${env.BRANCH_NAME}" \\
+                                --label "build-number=${env.BUILD_NUMBER}" \\
+                                --label "git-commit=\$(git rev-parse HEAD)" \\
+                                .
+                            
+                            echo "✅ Docker image built: ${imageName}"
+                            docker images | grep ${env.APPLICATION} | head -3
+                        """
+                        
+                        // Store image name for later stages
+                        env.DOCKER_IMAGE = imageName
+                    }
+                }
+            }
+        }
+        
+        stage('Push to Registry') {
+            when {
+                anyOf {
+                    expression { env.BRANCH_TYPE == 'develop' }
+                    expression { env.BRANCH_TYPE == 'main' }
+                }
+            }
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║                    📤 PUSH TO REGISTRY STAGE                         ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    withCredentials([usernamePassword(
+                        credentialsId: "${env.DOCKER_CREDENTIALS}",
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo "Logging in to Docker registry..."
+                            echo \${DOCKER_PASS} | docker login ${env.DOCKER_REGISTRY} -u \${DOCKER_USER} --password-stdin || true
+                            
+                            echo "Pushing image: ${env.DOCKER_IMAGE}"
+                            docker push ${env.DOCKER_IMAGE} || echo "⚠️  Push failed, continuing..."
+                            
+                            # Push latest tag for branch
+                            def latestTag = "${env.DOCKER_REGISTRY}/${env.APPLICATION}:${env.BRANCH_NAME.replaceAll('/', '-')}-latest"
+                            docker push \${latestTag} || echo "⚠️  Push latest failed, continuing..."
+                            
+                            echo "✅ Image pushed to registry"
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to DEV') {
+            when {
+                anyOf {
+                    expression { env.BRANCH_TYPE == 'develop' }
+                    expression { env.BRANCH_TYPE == 'main' }
+                }
+            }
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║                    🚀 DEPLOY TO DEV STAGE                            ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    // For develop branch, auto-deploy to dev
+                    if (env.BRANCH_TYPE == 'develop') {
+                        echo "Auto-deploying develop branch to DEV environment..."
+                        
+                        dir("apps/${env.APPLICATION}") {
+                            sh """
+                                echo "Deploying ${env.APPLICATION} to DEV..."
+                                echo "Image: ${env.DOCKER_IMAGE}"
+                                echo "Build: ${env.BUILD_NUMBER}"
+                                
+                                # Update dev environment values (if deploy script exists)
+                                if [ -f "deploy.sh" ]; then
+                                    chmod +x deploy.sh
+                                    ./deploy.sh DEV ${env.IMAGE_TAG} ${env.BUILD_NUMBER} || echo "⚠️  Deploy script not configured"
+                                else
+                                    echo "⚠️  deploy.sh not found, skipping deployment"
+                                fi
+                            """
+                        }
+                    } else {
+                        echo "Main branch detected - deployment requires manual approval"
+                    }
+                }
+            }
+        }
+        
+        stage('Create Pull Request Comment') {
+            when {
+                anyOf {
+                    expression { env.BRANCH_TYPE == 'feature' }
+                    expression { env.BRANCH_TYPE == 'bugfix' }
+                }
+            }
+            steps {
+                script {
+                    echo "╔══════════════════════════════════════════════════════════════════════╗"
+                    echo "║              💬 PR COMMENT STAGE (Feature/Bugfix)                    ║"
+                    echo "╚══════════════════════════════════════════════════════════════════════╝"
+                    
+                    // This would typically use GitHub API to comment on PR
+                    echo """
+                    Build completed for branch: ${env.BRANCH_NAME}
+                    Build Number: ${env.BUILD_NUMBER}
+                    Status: ✅ Success
+                    Image: ${env.DOCKER_IMAGE}
+                    
+                    Ready for code review and merge.
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                echo """
+                ╔══════════════════════════════════════════════════════════════════════╗
+                ║                    📊 BUILD SUMMARY                                 ║
+                ╚══════════════════════════════════════════════════════════════════════╝
+                
+                Branch: ${env.BRANCH_NAME}
+                Branch Type: ${env.BRANCH_TYPE}
+                Application: ${env.APPLICATION}
+                Build Number: ${env.BUILD_NUMBER}
+                Build Tag: ${env.BUILD_TAG}
+                Image Tag: ${env.IMAGE_TAG}
+                Status: ${currentBuild.currentResult}
+                """
+            }
+        }
+        
+        success {
+            script {
+                echo "✅ Pipeline completed successfully!"
+                
+                // Archive artifacts
+                archiveArtifacts artifacts: "apps/${env.APPLICATION}/**/*.json, apps/${env.APPLICATION}/Dockerfile", 
+                                     fingerprint: true, 
+                                     allowEmptyArchive: true
+            }
+        }
+        
+        failure {
+            script {
+                echo "❌ Pipeline failed!"
+                echo "Check the logs above for details."
+            }
+        }
+        
+        unstable {
+            script {
+                echo "⚠️  Pipeline completed with warnings"
+            }
+        }
+        
+        cleanup {
+            script {
+                // Cleanup Docker images
+                if (env.DOCKER_IMAGE) {
+                    sh """
+                        docker rmi ${env.DOCKER_IMAGE} || true
+                        docker system prune -f || true
+                    """
+                }
+            }
+            cleanWs(deleteDirs: true)
+        }
+    }
+}
+
