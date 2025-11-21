@@ -2492,7 +2492,7 @@ pipeline {
 // VIEWS: Deployment Status Dashboard
 // ==============================================================================
 
-listView('Release & Deployment Dashboard') {
+listView('Release and Deployment Dashboard') {
     description('📊 Release Build Jobs - Shows which builds are deployed to which environments')
     filterBuildQueue()
     filterExecutors()
