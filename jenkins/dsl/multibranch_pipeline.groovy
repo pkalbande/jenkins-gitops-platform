@@ -77,8 +77,8 @@ The pipeline automatically:
     // Orphaned item strategy - what to do with branches that no longer exist
     orphanedItemStrategy {
         discardOldItems {
-            daysToKeep(7)
-            numToKeep(10)
+            daysToKeepStr('7')
+            numToKeepStr('10')
         }
         defaultOrphanedItemStrategy {
             pruneDeadBranches(true)
