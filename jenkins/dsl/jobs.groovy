@@ -2487,3 +2487,91 @@ pipeline {
         }
     }
 }
+
+// ==============================================================================
+// VIEWS: Deployment Status Dashboard
+// ==============================================================================
+
+listView('Release & Deployment Dashboard') {
+    description('📊 Release Build Jobs - Shows which builds are deployed to which environments')
+    filterBuildQueue()
+    filterExecutors()
+    
+    jobs {
+        regex('.*release.*|.*docker-argocd.*|.*promoted-build.*')
+    }
+    
+    columns {
+        status()
+        weather()
+        name()
+        lastSuccess()
+        lastFailure()
+        lastDuration()
+        buildButton()
+        
+        // Show promotion status if available
+        promotionStatus()
+    }
+    
+    jobFilters {
+        status {
+            matchType(MatchType.INCLUDE_MATCHED)
+            status(Status.STABLE, Status.UNSTABLE, Status.FAILED)
+        }
+    }
+    
+    recurse(true)
+}
+
+// Deployment Status View - Shows all deployment-related jobs
+listView('Deployment Status') {
+    description('🚀 All Deployment Jobs - Track deployments across environments')
+    filterBuildQueue()
+    filterExecutors()
+    
+    jobs {
+        name('docker-argocd-release-job')
+        name('promoted-build-job')
+        regex('.*pipeline.*')
+    }
+    
+    columns {
+        status()
+        weather()
+        name()
+        lastSuccess()
+        lastFailure()
+        lastDuration()
+        lastBuildConsole()
+        buildButton()
+        
+        // Custom columns for build info
+        buildNumber()
+        lastSuccessBuildNumber()
+    }
+    
+    recurse(false)
+}
+
+// Pipeline View for Release Pipeline Flow
+buildPipelineView('Release Pipeline Flow') {
+    description('📈 Visualize the release pipeline flow from build to production')
+    filterBuildQueue()
+    filterExecutors()
+    
+    displayedBuilds(10)
+    title('Release Pipeline Visualization')
+    selectedJob('docker-argocd-release-job')
+    
+    showPipelineParameters()
+    showPipelineParametersInHeaders()
+    showPipelineDefinitionHeader()
+    refreshFrequency(5)
+    
+    startsWithParameters()
+    consoleOutputLinkStyle('Lightbox')
+    cssUrl('')
+    triggerOnlyLatestJob(true)
+    alwaysAllowManualTrigger(true)
+}
