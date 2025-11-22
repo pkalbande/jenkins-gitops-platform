@@ -1,16 +1,10 @@
 pipeline {
-    agent {
-        kubernetes {
-            label 'jnlp-agent'
-            defaultContainer 'jnlp'
-        }
-    }
+    agent any
     
     options {
         // Build options
-        buildDiscarder(logRotator(numToKeepStr: '20', daysToKeepStr: '30'))
-        timeout(time: 1, unit: 'HOURS')
-        timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '20', daysToKeepStr: '30'))
+    timeout(time: 1, unit: 'HOURS')
         ansiColor('xterm')
         
         // Skip stages for certain branches
@@ -19,7 +13,7 @@ pipeline {
     
     environment {
         // Detect branch type
-        BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
+    BRANCH_NAME = "${env.BRANCH_NAME ?: 'unknown'}"
         BRANCH_TYPE = "${env.BRANCH_NAME?.startsWith('feature/') ? 'feature' : env.BRANCH_NAME?.startsWith('bugfix/') ? 'bugfix' : env.BRANCH_NAME == 'develop' ? 'develop' : (['main', 'master'].contains(env.BRANCH_NAME) ? 'main' : 'other')}"
         
         // Docker configuration
