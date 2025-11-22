@@ -12,10 +12,6 @@ pipeline {
     }
     
     environment {
-        // Detect branch type
-    BRANCH_NAME = "${env.BRANCH_NAME ?: 'unknown'}"
-        BRANCH_TYPE = "${env.BRANCH_NAME?.startsWith('feature/') ? 'feature' : env.BRANCH_NAME?.startsWith('bugfix/') ? 'bugfix' : env.BRANCH_NAME == 'develop' ? 'develop' : (['main', 'master'].contains(env.BRANCH_NAME) ? 'main' : 'other')}"
-        
         // Docker configuration
         DOCKER_REGISTRY = 'localhost:5000'
         DOCKER_CREDENTIALS = 'docker-registry'
@@ -26,16 +22,22 @@ pipeline {
         
         // Application detection (will be set in Checkout stage)
         APPLICATION = "${env.APPLICATION ?: 'app1-node'}"
-        
-        // Build metadata
-        BUILD_TAG = "${(env.BRANCH_NAME ?: 'unknown')}-${env.BUILD_NUMBER}"
-        IMAGE_TAG = "${(['main', 'master'].contains(env.BRANCH_NAME) ? (env.BUILD_NUMBER?.toString() ?: '0') : (env.BRANCH_NAME ?: 'unknown').replaceAll('/', '-'))}-${env.BUILD_NUMBER}"
     }
     
     stages {
         stage('Checkout') {
             steps {
                 script {
+                    env.BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
+                    env.BRANCH_TYPE = env.BRANCH_NAME.startsWith('feature/') ? 'feature' :
+                        (env.BRANCH_NAME.startsWith('bugfix/') ? 'bugfix' :
+                        (env.BRANCH_NAME == 'develop' ? 'develop' :
+                        (['main', 'master'].contains(env.BRANCH_NAME) ? 'main' : 'other')))
+
+                    env.BUILD_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+                    def branchSlug = ['main', 'master'].contains(env.BRANCH_NAME) ? (env.BUILD_NUMBER?.toString() ?: '0') : env.BRANCH_NAME.replaceAll('/', '-')
+                    env.IMAGE_TAG = "${branchSlug}-${env.BUILD_NUMBER}"
+
                     echo "╔══════════════════════════════════════════════════════════════════════╗"
                     echo "║              🌿 MULTIBRANCH PIPELINE - CHECKOUT                      ║"
                     echo "╚══════════════════════════════════════════════════════════════════════╝"
