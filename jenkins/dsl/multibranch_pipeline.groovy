@@ -89,23 +89,9 @@ The pipeline automatically:
         }
     }
     
-    // Properties
-    properties {
-        // Pipeline triggers
-        pipelineTriggers {
-            triggers {
-                // Poll SCM periodically
-                scm('H/15 * * * *') // Every 15 minutes
-            }
-        }
-        
-        // GitHub project property
-        githubProjectProperty {
-            projectUrlStr('https://github.com/pkalbande/jenkins-gitops-platform')
-        }
-        
-        // Disable concurrent builds per branch
-        disableConcurrentBuildsJobProperty()
+    // Scan repository for changes periodically
+    triggers {
+        periodic(1) // Scan every 1 minute
     }
     
     // Build configuration
@@ -136,12 +122,8 @@ multibranchPipelineJob('multibranch-app1-node') {
         }
     }
     
-    properties {
-        pipelineTriggers {
-            triggers {
-                scm('H/15 * * * *')
-            }
-        }
+    triggers {
+        periodic(1)
     }
     
     // Set environment variable for application
