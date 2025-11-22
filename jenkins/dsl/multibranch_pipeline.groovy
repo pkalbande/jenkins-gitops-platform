@@ -80,10 +80,6 @@ The pipeline automatically:
             daysToKeepStr('7')
             numToKeepStr('10')
         }
-        defaultOrphanedItemStrategy {
-            pruneDeadBranches(true)
-            abortBuilds(false)
-        }
     }
     
     // Pipeline definition - points to Jenkinsfile
