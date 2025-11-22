@@ -15,8 +15,46 @@ pipeline {
         APP_NAME = 'multi-env-app'
     }
 
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    env.BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
+                    env.BUILD_VERSION = params.VERSION?.trim() ? params.VERSION.trim() : "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+                    env.BUILD_LABEL = env.BUILD_VERSION.replaceAll('[^A-Za-z0-9\-]+', '-').toLowerCase()
+                    env.ARTIFACT_NAME = "${env.APP_NAME}-${env.BUILD_LABEL}.txt"
+                    env.RELEASE_JOB_NAME = "release-build-${env.BUILD_LABEL}"
+
+                    currentBuild.displayName = env.BUILD_VERSION
+                    currentBuild.description = "Build for ${env.APP_NAME}"
+
+                    echo "Initialized build ${env.BUILD_VERSION} on branch ${env.BRANCH_NAME}"
                 }
             }
+        }
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    echo "Simulating build for ${env.APP_NAME} ${env.BUILD_VERSION}"
+                    sh '''#!/bin/bash
+set -e
+echo "Compiling sources..."
+sleep 1
+echo "Running tests..."
+sleep 1
+echo "Build successful."
+'''
+                }
+            }
+        }
+
         stage('Package') {
             steps {
                 script {
@@ -56,7 +94,7 @@ Timestamp   : ${now}
                     def versionTag = env.BUILD_VERSION
 
                     def dsl = """
-                            text(name: 'NOTES', description: 'Approval notes')
+pipelineJob('${releaseJobName}') {
     description('Deploy build ${versionTag} to any environment')
     displayName('${releaseJobName}')
 
@@ -71,7 +109,7 @@ Timestamp   : ${now}
     definition {
         cps {
             script('''
-                        ]
+pipeline {
     agent any
 
     stages {
@@ -102,8 +140,9 @@ Timestamp   : ${now}
                     }
 
                     def notes = params.DEPLOYMENT_NOTES?.trim() ? params.DEPLOYMENT_NOTES.trim() : 'N/A'
+                    echo "Preparing deployment of ${params.VERSION} to ${params.TARGET_ENVIRONMENT}"
+                    echo "Deployment notes: ${notes}"
                     sh "echo Deploying ${params.VERSION} to ${params.TARGET_ENVIRONMENT}"
-                    sh "echo Deployment notes: ${notes.replaceAll('"', '\\"')}"
                     sh "echo Deployment complete"
 
                     currentBuild.description = "${params.VERSION} → ${params.TARGET_ENVIRONMENT}".toString()
@@ -126,7 +165,7 @@ Timestamp   : ${now}
         }
     }
 }
-                    """
+"""
 
                     jobDsl scriptText: dsl
 
@@ -139,46 +178,14 @@ Timestamp   : ${now}
                 }
             }
         }
-                    )
-
-                    echo "Change Ticket: \\${approval.CHANGE_TICKET}"
-                    echo "Notes: \\${approval.NOTES}"
-
-                    sh "./deploy.sh prod ${params.VERSION}"
-
-                    emailext(
-                        subject: "PROD Deployed: ${params.VERSION}",
-                        body: "Version ${params.VERSION} deployed to production",
-                        to: 'prod-team@company.com'
-                    )
-                }
-            }
-        }
-    }
-}
-            ''')
-            sandbox(true)
-        }
-    }
-}
-                    """
-
-                    echo "✅ Created release job: ${releaseJobName}"
-                    if (env.JENKINS_URL) {
-                        echo "🔗 ${env.JENKINS_URL}job/${releaseJobName}"
-                    }
-                    currentBuild.description = currentBuild.description ? "${currentBuild.description} | 🎯 ${releaseJobName}" : "🎯 ${releaseJobName}"
-                }
-            }
-        }
     }
 
     post {
-        failure {
-            echo "❌ Pipeline failed for ${env.BUILD_VERSION}"
-        }
         success {
-            echo "✅ Pipeline completed successfully for ${env.BUILD_VERSION}"
+            echo "✅ Build ${env.BUILD_VERSION} completed"
+        }
+        failure {
+            echo "❌ Build ${env.BUILD_VERSION} failed"
         }
     }
 }
