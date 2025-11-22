@@ -21,7 +21,7 @@ pipeline {
                 script {
                     env.BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
                     env.BUILD_VERSION = params.VERSION?.trim() ? params.VERSION.trim() : "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
-                    env.BUILD_LABEL = env.BUILD_VERSION.replaceAll('[^A-Za-z0-9\-]+', '-').toLowerCase()
+                    env.BUILD_LABEL = env.BUILD_VERSION.replaceAll(/[^A-Za-z0-9-]+/, '-').toLowerCase()
                     env.ARTIFACT_NAME = "${env.APP_NAME}-${env.BUILD_LABEL}.txt"
                     env.RELEASE_JOB_NAME = "release-build-${env.BUILD_LABEL}"
 
