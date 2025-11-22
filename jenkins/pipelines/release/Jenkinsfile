@@ -119,7 +119,7 @@ pipeline {
                     projectName: params.SOURCE_JOB,
                     selector: specific(params.SOURCE_BUILD)
                 )
-                echo "Copied artifacts from ${params.SOURCE_JOB} #${params.SOURCE_BUILD}".toString()
+                echo "Copied artifacts from \${params.SOURCE_JOB} #\${params.SOURCE_BUILD}".toString()
             }
         }
 
@@ -140,12 +140,12 @@ pipeline {
                     }
 
                     def notes = params.DEPLOYMENT_NOTES?.trim() ? params.DEPLOYMENT_NOTES.trim() : 'N/A'
-                    echo "Preparing deployment of ${params.VERSION} to ${params.TARGET_ENVIRONMENT}"
-                    echo "Deployment notes: ${notes}"
-                    sh "echo Deploying ${params.VERSION} to ${params.TARGET_ENVIRONMENT}"
+                    echo "Preparing deployment of \${params.VERSION} to \${params.TARGET_ENVIRONMENT}"
+                    echo "Deployment notes: \${notes}"
+                    sh "echo Deploying \${params.VERSION} to \${params.TARGET_ENVIRONMENT}"
                     sh "echo Deployment complete"
 
-                    currentBuild.description = "${params.VERSION} → ${params.TARGET_ENVIRONMENT}".toString()
+                    currentBuild.description = "\${params.VERSION} → \${params.TARGET_ENVIRONMENT}".toString()
                 }
             }
         }
