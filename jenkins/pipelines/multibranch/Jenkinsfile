@@ -366,7 +366,7 @@ pipeline {
                     """
                 }
             }
-            cleanWs(deleteDirs: true)
+            deleteDir()
         }
     }
 }
