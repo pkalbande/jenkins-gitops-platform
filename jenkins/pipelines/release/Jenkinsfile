@@ -139,9 +139,12 @@ pipeline {
                         echo "Approval Notes: \${approval.APPROVAL_NOTES}"
                     }
 
-                    def notes = params.DEPLOYMENT_NOTES?.trim() ? params.DEPLOYMENT_NOTES.trim() : 'N/A'
+                    String deploymentNotes = params.DEPLOYMENT_NOTES?.trim()
+                    if (!deploymentNotes) {
+                        deploymentNotes = 'N/A'
+                    }
                     echo "Preparing deployment of \${params.VERSION} to \${params.TARGET_ENVIRONMENT}"
-                    echo "Deployment notes: \${notes}"
+                    echo "Deployment notes: " + deploymentNotes
                     sh "echo Deploying \${params.VERSION} to \${params.TARGET_ENVIRONMENT}"
                     sh "echo Deployment complete"
 
