@@ -89,10 +89,7 @@ The pipeline automatically:
         }
     }
     
-    // Scan repository for changes periodically
-    triggers {
-        periodic(1) // Scan every 1 minute
-    }
+    // Optional: configure scan triggers via UI if desired
     
     // Build configuration
     configure { project ->
@@ -122,9 +119,7 @@ multibranchPipelineJob('multibranch-app1-node') {
         }
     }
     
-    triggers {
-        periodic(1)
-    }
+    // Optional: configure branch indexing triggers via UI if desired
     
     // Set environment variable for application
     configure { project ->
