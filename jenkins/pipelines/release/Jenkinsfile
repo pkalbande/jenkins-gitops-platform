@@ -1,0 +1,159 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'VERSION', defaultValue: '', description: 'Version number (leave blank to use <branch>-<build>)')
+        booleanParam(name: 'CREATE_RELEASE_JOB', defaultValue: false, description: 'Create dedicated Stage/Prod release job for this build')
+    }
+
+    environment {
+        APP_NAME = 'my-app'
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    env.BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
+                    env.BUILD_VERSION = params.VERSION?.trim() ? params.VERSION.trim() : "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+                    echo "Preparing build ${env.BUILD_VERSION} for application ${env.APP_NAME}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    echo "Building version ${env.BUILD_VERSION}..."
+                    sh 'mvn clean package -DskipTests'
+
+                    def buildInfo = [
+                        buildNumber: env.BUILD_NUMBER,
+                        version    : env.BUILD_VERSION,
+                        timestamp  : new Date().format('yyyy-MM-dd HH:mm:ss')
+                    ]
+                    def buildInfoJson = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(buildInfo))
+                    writeFile file: 'build-info.json', text: buildInfoJson
+                    archiveArtifacts artifacts: 'target/**/*.jar,build-info.json', fingerprint: true, allowEmptyArchive: true
+                }
+            }
+        }
+
+        stage('Deploy to DEV') {
+            steps {
+                script {
+                    echo "Deploying ${env.BUILD_VERSION} to DEV..."
+                    sh "./deploy.sh dev ${env.BUILD_VERSION}"
+                    currentBuild.description = currentBuild.description ? "${currentBuild.description} | ✅ DEV" : '✅ DEV'
+                }
+            }
+        }
+
+        stage('Deploy to TEST') {
+            steps {
+                script {
+                    input message: 'Deploy to TEST environment?', ok: 'Deploy'
+                    echo "Deploying ${env.BUILD_VERSION} to TEST..."
+                    sh "./deploy.sh test ${env.BUILD_VERSION}"
+                    currentBuild.description = currentBuild.description ? "${currentBuild.description} | ✅ TEST" : '✅ TEST'
+                }
+            }
+        }
+
+        stage('Create Release Job') {
+            when {
+                expression { params.CREATE_RELEASE_JOB }
+            }
+            steps {
+                script {
+                    def releaseJobName = "Release-${env.BUILD_VERSION}"
+
+                    jobDsl scriptText: """
+pipelineJob('${releaseJobName}') {
+    description('Release ${env.BUILD_VERSION} - Stage & Prod Deployment')
+
+    parameters {
+        string('SOURCE_JOB', '${env.JOB_NAME}', 'Originating multibranch job')
+        string('SOURCE_BUILD', '${env.BUILD_NUMBER}', 'Source build number from multibranch pipeline')
+        string('VERSION', '${env.BUILD_VERSION}', 'Version to deploy to Stage/Prod')
+
+    definition {
+        cps {
+            script('''
+pipeline {
+    agent any
+
+    stages {
+        stage('Get Artifacts') {
+            steps {
+                script {
+                    copyArtifacts(
+                        projectName: params.SOURCE_JOB,
+                        selector: specific(params.SOURCE_BUILD)
+                    )
+                }
+            }
+        }
+
+        stage('Deploy to STAGE') {
+            steps {
+                script {
+                    input message: 'Deploy to STAGE?', submitter: 'release-managers'
+                    sh "./deploy.sh stage ${params.VERSION}"
+                }
+            }
+        }
+
+        stage('Deploy to PROD') {
+            steps {
+                script {
+                    def approval = input(
+                        message: 'Deploy to PRODUCTION?',
+                        submitter: 'prod-approvers',
+                        parameters: [
+                            string(name: 'CHANGE_TICKET', description: 'Change ticket number'),
+                            text(name: 'NOTES', description: 'Approval notes')
+                        ]
+                    )
+
+                    echo "Change Ticket: \\${approval.CHANGE_TICKET}"
+                    echo "Notes: \\${approval.NOTES}"
+
+                    sh "./deploy.sh prod ${params.VERSION}"
+
+                    emailext(
+                        subject: "PROD Deployed: ${params.VERSION}",
+                        body: "Version ${params.VERSION} deployed to production",
+                        to: 'prod-team@company.com'
+                    )
+                }
+            }
+        }
+    }
+}
+            ''')
+            sandbox(true)
+        }
+    }
+}
+                    """
+
+                    echo "✅ Created release job: ${releaseJobName}"
+                    if (env.JENKINS_URL) {
+                        echo "🔗 ${env.JENKINS_URL}job/${releaseJobName}"
+                    }
+                    currentBuild.description = currentBuild.description ? "${currentBuild.description} | 🎯 ${releaseJobName}" : "🎯 ${releaseJobName}"
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Pipeline failed for ${env.BUILD_VERSION}"
+        }
+        success {
+            echo "✅ Pipeline completed successfully for ${env.BUILD_VERSION}"
+        }
+    }
+}
