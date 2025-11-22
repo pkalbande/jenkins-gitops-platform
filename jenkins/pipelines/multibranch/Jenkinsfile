@@ -260,17 +260,26 @@ pipeline {
                     echo "║                    🚀 DEPLOY TO DEV STAGE                            ║"
                     echo "╚══════════════════════════════════════════════════════════════════════╝"
                     
-                    // For develop branch, auto-deploy to dev
+                    def shouldDeploy = false
                     if (env.BRANCH_TYPE == 'develop') {
                         echo "Auto-deploying develop branch to DEV environment..."
-                        
+                        shouldDeploy = true
+                    } else if (env.BRANCH_TYPE == 'main') {
+                        echo "Main branch detected - manual approval required before deploying to DEV"
+                        shouldDeploy = input(
+                            message: 'Deploy main branch build to DEV environment?',
+                            ok: 'Deploy to DEV',
+                            submitter: 'admin,devops-team'
+                        ) != null
+                    }
+
+                    if (shouldDeploy) {
                         dir("apps/${env.APPLICATION}") {
                             sh """
                                 echo "Deploying ${env.APPLICATION} to DEV..."
                                 echo "Image: ${env.DOCKER_IMAGE}"
                                 echo "Build: ${env.BUILD_NUMBER}"
                                 
-                                # Update dev environment values (if deploy script exists)
                                 if [ -f "deploy.sh" ]; then
                                     chmod +x deploy.sh
                                     ./deploy.sh DEV ${env.IMAGE_TAG} ${env.BUILD_NUMBER} || echo "⚠️  Deploy script not configured"
@@ -280,7 +289,7 @@ pipeline {
                             """
                         }
                     } else {
-                        echo "Main branch detected - deployment requires manual approval"
+                        echo "Skipping DEV deployment for branch type: ${env.BRANCH_TYPE}"
                     }
                 }
             }
