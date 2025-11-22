@@ -20,11 +20,7 @@ pipeline {
     environment {
         // Detect branch type
         BRANCH_NAME = env.BRANCH_NAME ?: 'unknown'
-        BRANCH_TYPE = "${env.BRANCH_NAME.startsWith('feature/') ? 'feature' : 
-                       env.BRANCH_NAME.startsWith('bugfix/') ? 'bugfix' : 
-                       env.BRANCH_NAME == 'develop' ? 'develop' : 
-                       env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' ? 'main' : 
-                       'other'}"
+        BRANCH_TYPE = "${env.BRANCH_NAME?.startsWith('feature/') ? 'feature' : env.BRANCH_NAME?.startsWith('bugfix/') ? 'bugfix' : env.BRANCH_NAME == 'develop' ? 'develop' : (['main', 'master'].contains(env.BRANCH_NAME) ? 'main' : 'other')}"
         
         // Docker configuration
         DOCKER_REGISTRY = 'localhost:5000'
@@ -38,10 +34,8 @@ pipeline {
         APPLICATION = "${env.APPLICATION ?: 'app1-node'}"
         
         // Build metadata
-        BUILD_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
-        IMAGE_TAG = "${env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' ? 
-                     env.BUILD_NUMBER : 
-                     env.BRANCH_NAME.replaceAll('/', '-')}-${env.BUILD_NUMBER}"
+        BUILD_TAG = "${(env.BRANCH_NAME ?: 'unknown')}-${env.BUILD_NUMBER}"
+        IMAGE_TAG = "${(['main', 'master'].contains(env.BRANCH_NAME) ? (env.BUILD_NUMBER?.toString() ?: '0') : (env.BRANCH_NAME ?: 'unknown').replaceAll('/', '-'))}-${env.BUILD_NUMBER}"
     }
     
     stages {
